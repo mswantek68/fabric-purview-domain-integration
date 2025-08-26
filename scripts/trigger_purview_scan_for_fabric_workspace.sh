@@ -9,9 +9,10 @@ fail(){ echo "[purview-scan][ERROR] $*" >&2; exit 1; }
 # Usage: ./trigger_purview_scan_for_fabric_workspace.sh [<workspace-id>]
 # If no arg provided the script will look for /tmp/fabric_workspace.env and /tmp/fabric_datasource.env
 
-PURVIEW_ACCOUNT_NAME=$(azd env get-value purviewAccountName 2>/dev/null || true)
+# Determine Purview account name from environment or azd env
+PURVIEW_ACCOUNT_NAME=${PURVIEW_ACCOUNT_NAME:-$(azd env get-value purviewAccountName 2>/dev/null || true)}
 if [[ -z "${PURVIEW_ACCOUNT_NAME}" ]]; then
-  fail "purviewAccountName not found in azd env. Set azd env or pass PURVIEW_ACCOUNT_NAME environment variable."
+  fail "purviewAccountName not found in azd env and PURVIEW_ACCOUNT_NAME not set. Set azd env or pass PURVIEW_ACCOUNT_NAME environment variable."
 fi
 
 # Load datasource info if available
@@ -56,14 +57,15 @@ log "Creating/Updating scan '${SCAN_NAME}' for datasource '${DATASOURCE_NAME}' t
 SCAN_PAYLOAD=$(cat <<JSON
 {
   "properties": {
-    "scanRulesetName": "Default",
+    "includePersonalWorkspaces": false,
     "scanScope": {
       "type": "PowerBIScanScope",
       "workspaces": [
         { "id": "${WORKSPACE_ID}" }
       ]
     }
-  }
+  },
+  "kind": "PowerBIMsi"
 }
 JSON
 )
