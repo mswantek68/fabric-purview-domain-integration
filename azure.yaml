@@ -17,6 +17,8 @@ hooks:
       interactive: false
     - run: ./scripts/setup_fabric_scan_guidance.sh
       interactive: false
+    - run: ./scripts/trigger_purview_scan_for_fabric_workspace.sh
+      interactive: false
     - run: ./scripts/connect_log_analytics.sh
       interactive: false
     - run: ./scripts/create_lakehouses.sh

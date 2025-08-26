@@ -226,6 +226,9 @@ if [[ -n "$EXISTING_ID" ]]; then
       log "  3. Add workspace '$FABRIC_WORKSPACE_NAME' to the domain"
     fi
   fi
+  # Export workspace id/name for downstream scripts
+  echo "FABRIC_WORKSPACE_ID=${WORKSPACE_ID}" > /tmp/fabric_workspace.env
+  echo "FABRIC_WORKSPACE_NAME=${FABRIC_WORKSPACE_NAME:-$FABRIC_WORKSPACE_NAME}" >> /tmp/fabric_workspace.env
   exit 0
 fi
 
