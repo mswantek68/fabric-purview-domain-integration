@@ -1,4 +1,4 @@
-name: ai-appIsolatedAVM
+name: ai-fabric-foundry
 infra:
   provider: bicep
 hooks:
