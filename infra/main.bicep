@@ -1,13 +1,13 @@
 // Parameters for resource group and subscription
-param fabricCapacityName string = 'swancapacity9'
+param fabricCapacityName string = 'swancapacity11'
 param fabricCapacitySKU string ='F64'
 @description('Admin principal UPNs or objectIds to assign to the capacity (optional).')
 param capacityAdminMembers array = ['admin@MngEnv282784.onmicrosoft.com', 'mswantek@MngEnv282784.onmicrosoft.com']
 // Optional: workspace name passed via azd env or parameters (used by post-provision script, not ARM)
 @description('Desired Fabric workspace display name (workspace is currently not deployable via ARM as of Aug 2025).')
-param fabricWorkspaceName string = 'swan-workspace9'
+param fabricWorkspaceName string = 'swan-workspace11'
 @description('Desired Fabric Data Domain name (governance domain). Used only by post-provision script; Fabric Domains not deployable via ARM yet.')
-param domainName string = 'swan-data-domain9'
+param domainName string = 'swan-data-domain11'
 @description('Name of the existing Purview account for governance integration')
 param purviewAccountName string = 'swantekpurview'
 
