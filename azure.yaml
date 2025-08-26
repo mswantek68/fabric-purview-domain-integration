@@ -1,0 +1,25 @@
+name: ai-appIsolatedAVM
+infra:
+  provider: bicep
+hooks:
+  postprovision:
+    - run: ./scripts/ensure_active_capacity.sh
+      interactive: false
+    - run: ./scripts/create_fabric_domain.sh
+      interactive: false
+    - run: ./scripts/create_fabric_workspace.sh
+      interactive: false
+    - run: ./scripts/assign_workspace_to_domain.sh
+      interactive: false
+    - run: ./scripts/create_purview_collection.sh
+      interactive: false
+    - run: ./scripts/register_fabric_datasource.sh
+      interactive: false
+    - run: ./scripts/setup_fabric_scan_guidance.sh
+      interactive: false
+    - run: ./scripts/connect_log_analytics.sh
+      interactive: false
+    - run: ./scripts/create_lakehouses.sh
+      interactive: false
+metadata:
+  template: ''
