@@ -1,4 +1,4 @@
-# Microsoft Fabric + Purview Data Governance Solution
+# Microsoft Fabric + Purview Data Governance Accelerator
 
 ## 🚀 Overview
 
