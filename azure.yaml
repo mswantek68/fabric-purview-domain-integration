@@ -3,25 +3,25 @@ infra:
   provider: bicep
 hooks:
   postprovision:
-    - run: ./scripts/ensure_active_capacity.sh
+    - run: pwsh -NoProfile -NonInteractive -File ./scripts/ensure_active_capacity.ps1
       interactive: false
-    - run: ./scripts/create_fabric_domain.sh
+    - run: pwsh -NoProfile -NonInteractive -File ./scripts/create_fabric_domain.ps1
       interactive: false
-    - run: ./scripts/create_fabric_workspace.sh
+    - run: pwsh -NoProfile -NonInteractive -File ./scripts/create_fabric_workspace.ps1
       interactive: false
-    - run: ./scripts/assign_workspace_to_domain.sh
+    - run: pwsh -NoProfile -NonInteractive -File ./scripts/assign_workspace_to_domain.ps1
       interactive: false
-    - run: ./scripts/create_purview_collection.sh
+    - run: pwsh -NoProfile -NonInteractive -File ./scripts/create_purview_collection.ps1
       interactive: false
-    - run: ./scripts/register_fabric_datasource.sh
+    - run: pwsh -NoProfile -NonInteractive -File ./scripts/register_fabric_datasource.ps1
       interactive: false
-    - run: ./scripts/setup_fabric_scan_guidance.sh
+    - run: pwsh -NoProfile -NonInteractive -File ./scripts/setup_fabric_scan_guidance.ps1
       interactive: false
-    - run: ./scripts/trigger_purview_scan_for_fabric_workspace.sh
+    - run: pwsh -NoProfile -NonInteractive -File ./scripts/trigger_purview_scan_for_fabric_workspace.ps1
       interactive: false
-    - run: ./scripts/connect_log_analytics.sh
+    - run: pwsh -NoProfile -NonInteractive -File ./scripts/connect_log_analytics.ps1
       interactive: false
-    - run: ./scripts/create_lakehouses.sh
+    - run: pwsh -NoProfile -NonInteractive -File ./scripts/create_lakehouses.ps1
       interactive: false
 metadata:
   template: ''
