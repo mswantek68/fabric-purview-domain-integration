@@ -1,13 +1,15 @@
 // Parameters for resource group and subscription
-param fabricCapacityName string = '<FabricCapacityName>'
-param fabricCapacitySKU string ='<FabricCapacitySKU>'
+param fabricCapacityName string = '<fabricCapacityName>'
+param fabricCapacitySKU string ='F64'
+@description('Admin principal UPNs or objectIds to assign to the capacity (optional).')
+param capacityAdminMembers array = [ '<admin@your-domain.com>' ]
 // Optional: workspace name passed via azd env or parameters (used by post-provision script, not ARM)
 @description('Desired Fabric workspace display name (workspace is currently not deployable via ARM as of Aug 2025).')
-param fabricWorkspaceName string = '<FabricWorkspaceName>'
+param fabricWorkspaceName string = '<fabricWorkspaceName>'
 @description('Desired Fabric Data Domain name (governance domain). Used only by post-provision script; Fabric Domains not deployable via ARM yet.')
-param domainName string = '<DataDomainName>'
+param domainName string = '<domainName>'
 @description('Name of the existing Purview account for governance integration')
-param purviewAccountName string = '<PurviewInstanceName>'
+param purviewAccountName string = '<purviewAccountName>'
 
 // Purview Data Map domain parameters (technical collection hierarchy used by scans/RBAC)
 @description('Data Map domain (top-level collection) name used for automation. Distinct from Unified Catalog governance domain.')
@@ -29,15 +31,14 @@ param purviewGovernanceDomainType string = 'Data Domain'
 @description('Optional: Parent governance domain ID (GUID) in Unified Catalog; empty for top-level')
 param purviewGovernanceDomainParentId string = ''
 
+
+
 // Deploy Fabric Capacity
 module capacity 'br/public:avm/res/fabric/capacity:0.1.1' = {
   name: 'FabricCapacityDeployment'
   params: {
     name: fabricCapacityName
-    adminMembers: [
-      '<AdminEmail1>'
-      '<AdminEmail2>'
-    ]
+    adminMembers: capacityAdminMembers
     skuName:fabricCapacitySKU
   }
 }

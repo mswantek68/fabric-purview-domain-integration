@@ -1,0 +1,28 @@
+name: Scheduled Purview scan for Fabric workspace
+
+# Runs once a week (Sunday 01:00 UTC) and can be triggered manually
+on:
+  schedule:
+    - cron: '0 1 * * 0'
+  workflow_dispatch:
+
+jobs:
+  trigger-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          # Create an AZURE_CREDENTIALS secret containing JSON with clientId, clientSecret, tenantId, subscriptionId
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Trigger Purview scan for Fabric workspace
+        env:
+          PURVIEW_ACCOUNT_NAME: ${{ secrets.PURVIEW_ACCOUNT_NAME }}
+        run: |
+          set -euo pipefail
+          chmod +x ./scripts/trigger_purview_scan_for_fabric_workspace.sh
+          # Provide the Fabric workspace id in the FABRIC_WORKSPACE_ID repository secret
+          ./scripts/trigger_purview_scan_for_fabric_workspace.sh "${{ secrets.FABRIC_WORKSPACE_ID }}"
