@@ -54,9 +54,34 @@ try {
 if (-not $purviewToken) { Fail "Failed to acquire Purview access token" }
 
 $endpoint = "https://$PurviewAccountName.purview.azure.com"
+
+# Determine Purview datasource name. If a previous script created it, /tmp/fabric_datasource.env will contain FABRIC_DATASOURCE_NAME. If missing or empty, skip scan creation.
+$datasourceName = 'Fabric'
+if (Test-Path '/tmp/fabric_datasource.env') {
+  Get-Content '/tmp/fabric_datasource.env' | ForEach-Object {
+    if ($_ -match '^FABRIC_DATASOURCE_NAME=(.*)$') { $datasourceName = $Matches[1].Trim() }
+  }
+}
+if (-not $datasourceName -or $datasourceName -eq '') {
+  Log "No Purview datasource registered (FABRIC_DATASOURCE_NAME is empty). Skipping scan creation and run."
+  exit 0
+}
+
+# Determine Purview collection ID for domain assignment
+$collectionId = $null
+if (Test-Path '/tmp/purview_collection.env') {
+  Get-Content '/tmp/purview_collection.env' | ForEach-Object {
+    if ($_ -match '^PURVIEW_COLLECTION_ID=(.*)$') { $collectionId = $Matches[1].Trim() }
+  }
+}
+if (-not $collectionId) {
+  Log "No Purview collection found. Scan will be created in root collection."
+}
+
 $scanName = "scan-workspace-$WorkspaceId"
 
-Log "Creating/Updating scan '$scanName' for datasource 'Fabric' targeting workspace '$WorkspaceId'"
+Log "Creating/Updating scan '$scanName' for datasource '$datasourceName' targeting workspace '$WorkspaceId'"
+if ($collectionId) { Log "Assigning scan to collection: $collectionId" }
 
 # Build payload
 $payload = [PSCustomObject]@{
@@ -72,20 +97,28 @@ $payload = [PSCustomObject]@{
   kind = 'PowerBIMsi'
 }
 
+# Add collection assignment if available
+if ($collectionId) {
+  $payload.properties | Add-Member -MemberType NoteProperty -Name 'collection' -Value ([PSCustomObject]@{
+    referenceName = $collectionId
+    type = 'CollectionReference'
+  })
+}
+
 $bodyJson = $payload | ConvertTo-Json -Depth 10
 
 # Create or update scan
-$createUrl = "$endpoint/scan/datasources/Fabric/scans/$scanName?api-version=2022-07-01-preview"
+$createUrl = "$endpoint/scan/datasources/$datasourceName/scans/${scanName}?api-version=2022-07-01-preview"
 try {
   $resp = Invoke-WebRequest -Uri $createUrl -Method Put -Headers @{ Authorization = "Bearer $purviewToken"; 'Content-Type' = 'application/json' } -Body $bodyJson -UseBasicParsing -ErrorAction Stop
-  $code = $resp.StatusCode.Value__
+  $code = $resp.StatusCode
   $respBody = $resp.Content
 } catch [System.Net.WebException] {
   $resp = $_.Exception.Response
   if ($resp) {
     $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
     $respBody = $reader.ReadToEnd()
-    $code = $resp.StatusCode.value__
+    $code = $resp.StatusCode
   } else {
     Fail "Scan create/update failed: $_"
   }
@@ -94,14 +127,14 @@ try {
 if ($code -ge 200 -and $code -lt 300) { Log "Scan definition created/updated (HTTP $code)" } else { Warn "Scan create/update failed (HTTP $code): $respBody"; Fail "Could not create/update scan" }
 
 # Trigger a run
-$runUrl = "$endpoint/scan/datasources/Fabric/scans/$scanName/run?api-version=2022-07-01-preview"
+$runUrl = "$endpoint/scan/datasources/$datasourceName/scans/$scanName/run?api-version=2022-07-01-preview"
 try {
   $runResp = Invoke-WebRequest -Uri $runUrl -Method Post -Headers @{ Authorization = "Bearer $purviewToken"; 'Content-Type' = 'application/json' } -Body '{}' -UseBasicParsing -ErrorAction Stop
   $runBody = $runResp.Content
-  $runCode = $runResp.StatusCode.Value__
+  $runCode = $runResp.StatusCode
 } catch [System.Net.WebException] {
   $resp = $_.Exception.Response
-  if ($resp) { $reader = New-Object System.IO.StreamReader($resp.GetResponseStream()); $runBody = $reader.ReadToEnd(); $runCode = $resp.StatusCode.value__ } else { Fail "Scan run request failed: $_" }
+  if ($resp) { $reader = New-Object System.IO.StreamReader($resp.GetResponseStream()); $runBody = $reader.ReadToEnd(); $runCode = $resp.StatusCode } else { Fail "Scan run request failed: $_" }
 }
 
 if ($runCode -ne 200 -and $runCode -ne 202) { Write-Output $runBody; Fail "Scan run request failed (HTTP $runCode)" }
@@ -124,7 +157,7 @@ Log "Scan run started: $runId — polling status..."
 
 while ($true) {
   Start-Sleep -Seconds 5
-  $statusUrl = "$endpoint/scan/datasources/Fabric/scans/$scanName/runs/$runId?api-version=2022-07-01-preview"
+  $statusUrl = "$endpoint/scan/datasources/$datasourceName/scans/${scanName}/runs/${runId}?api-version=2022-07-01-preview"
   try {
     $sjson = Invoke-RestMethod -Uri $statusUrl -Headers @{ Authorization = "Bearer $purviewToken" } -Method Get -ErrorAction Stop
   } catch {

@@ -25,6 +25,36 @@ if (-not $CapacityId -and $env:AZURE_OUTPUTS_JSON) {
   try { $out = $env:AZURE_OUTPUTS_JSON | ConvertFrom-Json; $CapacityId = $out.fabricCapacityId.value } catch {}
 }
 
+# Fallbacks: try .azure/<env>/.env and infra/main.bicep before failing
+if (-not $WorkspaceName) {
+  # Try .azure env file
+  $azureEnvName = $env:AZURE_ENV_NAME
+  if (-not $azureEnvName -and (Test-Path '.azure')) {
+    $dirs = Get-ChildItem -Path '.azure' -Name -ErrorAction SilentlyContinue
+    if ($dirs) { $azureEnvName = $dirs[0] }
+  }
+  if ($azureEnvName) {
+    $envFile = Join-Path -Path '.azure' -ChildPath "$azureEnvName/.env"
+    if (Test-Path $envFile) {
+      Get-Content $envFile | ForEach-Object {
+        if ($_ -match '^FABRIC_WORKSPACE_NAME=(.+)$') { $WorkspaceName = $Matches[1].Trim("'", '"') }
+        if ($_ -match '^fabricCapacityId=(.+)$') { $CapacityId = $Matches[1].Trim("'", '"') }
+      }
+    }
+  }
+}
+
+if (-not $WorkspaceName -and (Test-Path 'infra/main.bicep')) {
+  try {
+    $bicep = Get-Content 'infra/main.bicep' -Raw
+    $m = [regex]::Match($bicep, "param\s+fabricWorkspaceName\s+string\s*=\s*'(?<val>[^']+)'")
+    if ($m.Success) {
+      $val = $m.Groups['val'].Value
+      if ($val -and -not ($val -match '^<.*>$')) { $WorkspaceName = $val }
+    }
+  } catch {}
+}
+
 if (-not $WorkspaceName) { Fail 'FABRIC_WORKSPACE_NAME unresolved (no outputs/env/bicep).' }
 
 # Acquire tokens
@@ -35,10 +65,57 @@ $apiRoot = 'https://api.powerbi.com/v1.0/myorg'
 
 # Resolve capacity GUID if capacity ARM id given
 $capacityGuid = $null
+Log "CapacityId parameter: '$CapacityId'"
 if ($CapacityId) {
   $capName = ($CapacityId -split '/')[ -1 ]
-  try { $caps = Invoke-RestMethod -Uri "$apiRoot/admin/capacities" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop } catch { $caps = $null }
-  if ($caps.value) { $match = $caps.value | Where-Object { ($_.displayName -eq $capName) -or ($_.name -eq $capName) }; if ($match) { $capacityGuid = $match.id } }
+  Log "Deriving Fabric capacity GUID for name: $capName"
+  
+  try { 
+    $caps = Invoke-RestMethod -Uri "$apiRoot/admin/capacities" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+    if ($caps.value) { 
+      Log "Searching through $($caps.value.Count) capacities for: '$capName'"
+      
+      # Use a simple foreach loop instead of Where-Object to debug comparison issues
+      foreach ($cap in $caps.value) {
+        $capDisplayName = if ($cap.PSObject.Properties['displayName']) { $cap.displayName } else { '' }
+        $capName2 = if ($cap.PSObject.Properties['name']) { $cap.name } else { '' }
+        
+        Log "  Checking capacity: displayName='$capDisplayName' name='$capName2' id='$($cap.id)'"
+        
+        # Direct string comparison
+        if ($capDisplayName -eq $capName -or $capName2 -eq $capName) {
+          $capacityGuid = $cap.id
+          Log "EXACT MATCH FOUND: Using capacity '$capDisplayName' with GUID: $capacityGuid"
+          break
+        }
+        
+        # Case-insensitive fallback
+        if ($capDisplayName.ToLower() -eq $capName.ToLower() -or $capName2.ToLower() -eq $capName.ToLower()) {
+          $capacityGuid = $cap.id
+          Log "CASE-INSENSITIVE MATCH FOUND: Using capacity '$capDisplayName' with GUID: $capacityGuid"
+          break
+        }
+      }
+      
+      if (-not $capacityGuid) {
+        Log "NO MATCH FOUND. Available capacities:"
+        foreach ($cap in $caps.value) {
+          Log "  - displayName='$($cap.displayName)' name='$($cap.name)' id='$($cap.id)'"
+        }
+        Fail "Could not find capacity named '$capName'"
+      }
+    } else {
+      Fail "No capacities returned from API"
+    }
+  } catch { 
+    Fail "Failed to query capacities: $_"
+  }
+  
+  if ($capacityGuid) {
+    Log "Resolved capacity GUID: $capacityGuid"
+  } else {
+    Fail "Could not resolve capacity GUID for '$capName'"
+  }
 }
 
 # Check if workspace exists
@@ -56,8 +133,17 @@ if ($workspaceId) {
     try {
       $assignResp = Invoke-WebRequest -Uri "$apiRoot/groups/$workspaceId/AssignToCapacity" -Method Post -Headers @{ Authorization = "Bearer $accessToken"; 'Content-Type' = 'application/json' } -Body (@{ capacityId = $capacityGuid } | ConvertTo-Json) -UseBasicParsing -ErrorAction Stop
       Log "Capacity assignment response: $($assignResp.StatusCode)"
-    } catch { Warn "Capacity reassign failed: $_" }
-  }
+      
+      # Verify assignment worked
+      Start-Sleep -Seconds 3
+      $workspace = Invoke-RestMethod -Uri "$apiRoot/groups/$workspaceId" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+      if ($workspace.capacityId) {
+        Log "Workspace successfully assigned to capacity: $($workspace.capacityId)"
+      } else {
+        Fail "Workspace capacity assignment verification failed - workspace still has no capacity"
+      }
+    } catch { Fail "Capacity reassign failed: $_" }
+  } else { Fail 'No capacity GUID resolved; cannot proceed without capacity assignment.' }
   # assign admins
   if ($AdminUPNs) {
     $admins = $AdminUPNs -split ',' | ForEach-Object { $_.Trim() }
@@ -70,11 +156,11 @@ if ($workspaceId) {
         Log "Adding admin: $admin"
         try {
           Invoke-WebRequest -Uri "$apiRoot/groups/$workspaceId/users" -Method Post -Headers @{ Authorization = "Bearer $accessToken"; 'Content-Type' = 'application/json' } -Body (@{ identifier = $admin; groupUserAccessRight = 'Admin'; principalType = 'User' } | ConvertTo-Json) -UseBasicParsing -ErrorAction Stop
-        } catch { Warn "Failed to add $admin: $_" }
+        } catch { Warn "Failed to add $($admin): $($_)" }
       } else { Log "Admin already present: $admin" }
     }
   }
-  # export workspace env
+  # Export workspace id/name for downstream scripts
   Set-Content -Path '/tmp/fabric_workspace.env' -Value "FABRIC_WORKSPACE_ID=$workspaceId`nFABRIC_WORKSPACE_NAME=$WorkspaceName"
   exit 0
 }
@@ -92,10 +178,20 @@ try {
 # Assign to capacity
 if ($capacityGuid) {
   try {
+    Log "Assigning workspace to capacity GUID: $capacityGuid"
     $assignResp = Invoke-WebRequest -Uri "$apiRoot/groups/$workspaceId/AssignToCapacity" -Method Post -Headers @{ Authorization = "Bearer $accessToken"; 'Content-Type' = 'application/json' } -Body (@{ capacityId = $capacityGuid } | ConvertTo-Json) -UseBasicParsing -ErrorAction Stop
     Log "Capacity assignment response: $($assignResp.StatusCode)"
-  } catch { Warn "Capacity assignment failed: $_" }
-} else { Warn 'No capacity GUID resolved; skipping capacity assignment.' }
+    
+    # Verify assignment worked
+    Start-Sleep -Seconds 3
+    $workspace = Invoke-RestMethod -Uri "$apiRoot/groups/$workspaceId" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+    if ($workspace.capacityId) {
+      Log "Workspace successfully assigned to capacity: $($workspace.capacityId)"
+    } else {
+      Fail "Workspace capacity assignment verification failed - workspace still has no capacity"
+    }
+  } catch { Fail "Capacity assignment failed: $_" }
+} else { Fail 'No capacity GUID resolved; cannot create workspace without capacity assignment.' }
 
 # Add admins
 if ($AdminUPNs) {
@@ -105,7 +201,7 @@ if ($AdminUPNs) {
     try {
       Invoke-WebRequest -Uri "$apiRoot/groups/$workspaceId/users" -Method Post -Headers @{ Authorization = "Bearer $accessToken"; 'Content-Type' = 'application/json' } -Body (@{ identifier = $admin; groupUserAccessRight = 'Admin'; principalType = 'User' } | ConvertTo-Json) -UseBasicParsing -ErrorAction Stop
       Log "Added admin: $admin"
-    } catch { Warn "Failed to add $admin: $_" }
+    } catch { Warn "Failed to add $($admin): $($_)" }
   }
 }
 

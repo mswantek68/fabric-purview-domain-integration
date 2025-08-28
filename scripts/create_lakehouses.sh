@@ -129,8 +129,7 @@ for name in "${TARGETS[@]}"; do
   log "Creating lakehouse: $lname"
   CREATE_PAYLOAD=$(cat <<JSON
 {
-  "displayName": "$lname",
-  "type": "Lakehouse"
+  "displayName": "$lname"
 }
 JSON
   )
@@ -138,7 +137,8 @@ JSON
   created_this=0
   while [[ $attempts -lt $max_attempts ]]; do
     attempts=$((attempts+1))
-    RESP=$(curl -s -w '\n%{http_code}' -X POST "$API_ROOT/workspaces/$WORKSPACE_ID/items" \
+    # Try the dedicated lakehouses endpoint first
+    RESP=$(curl -s -w '\n%{http_code}' -X POST "$API_ROOT/workspaces/$WORKSPACE_ID/lakehouses" \
       -H "Authorization: Bearer $ACCESS_TOKEN" \
       -H "Content-Type: application/json" \
       -d "$CREATE_PAYLOAD")
@@ -151,26 +151,35 @@ JSON
       created_this=1
       break
     fi
-    # Extract errorCode if possible
-    ERR_CODE=""; if command -v jq >/dev/null 2>&1; then ERR_CODE=$(echo "$BODY" | jq -r '.errorCode // .error.code // empty'); fi
-    [[ -z "$ERR_CODE" ]] && ERR_CODE=$(echo "$BODY" | grep -o 'UnsupportedCapacitySKU' || true)
-    if echo "$BODY" | grep -q 'UnsupportedCapacitySKU'; then
+    # If the lakehouses endpoint isn't supported, fallback to items endpoint
+    if [[ "$CODE" == 404 || "$CODE" == 405 || "$CODE" == 400 ]]; then
+      RESP2=$(curl -s -w '\n%{http_code}' -X POST "$API_ROOT/workspaces/$WORKSPACE_ID/items" \
+        -H "Authorization: Bearer $ACCESS_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{"displayName": "$lname", "type": "Lakehouse"}')
+      BODY2=$(echo "$RESP2" | head -n -1)
+      CODE2=$(echo "$RESP2" | tail -n1)
+      if [[ "$CODE2" == 200 || "$CODE2" == 201 || "$CODE2" == 202 ]]; then
+        ID_CREATED=$(echo "$BODY2" | jq -r '.id // empty')
+        log "Created lakehouse $lname ($ID_CREATED) via items endpoint"
+        CREATED=$((CREATED+1))
+        created_this=1
+        break
+      fi
+    fi
+    # Handle unsupported SKU specifically
+    if echo "$BODY" | grep -q 'UnsupportedCapacitySKU' || echo "$BODY2" | grep -q 'UnsupportedCapacitySKU'; then
       warn "Attempt $attempts: UnsupportedCapacitySKU for $lname (HTTP $CODE). $SUPPORTED_HINT"
-      # Do not hammer; break early since this is likely permanent for current SKU
       break
-    elif echo "$BODY" | grep -qi 'NotInActiveState'; then
-      warn "Attempt $attempts: Capacity not active yet for $lname (HTTP $CODE); retry in $backoff s."
+    fi
+    # retry logic for transient errors
+    if [[ "$CODE" =~ ^5 || "$CODE" == 429 ]]; then
       sleep $backoff
       continue
     else
+      # non-retriable
       warn "Attempt $attempts: Failed to create $lname (HTTP $CODE): $BODY"
-      # Retry only for 5xx or 429 or ambiguous 400 without UnsupportedCapacitySKU up to attempts
-      if [[ "$CODE" =~ ^5 || "$CODE" == 429 ]]; then
-        sleep $backoff
-        continue
-      else
-        break
-      fi
+      break
     fi
   done
   if [[ $created_this -eq 0 ]]; then

@@ -41,7 +41,7 @@ if ($existing) {
   Log "Creating new collection '$collectionName' under default domain..."
   $payload = @{ friendlyName = $collectionName; description = "Collection for $collectionName with Fabric workspace and lakehouses" } | ConvertTo-Json -Depth 4
   try {
-    $resp = Invoke-WebRequest -Uri "$endpoint/account/collections/$collectionName?api-version=2019-11-01-preview" -Headers @{ Authorization = "Bearer $purviewToken"; 'Content-Type' = 'application/json' } -Method Put -Body $payload -UseBasicParsing -ErrorAction Stop
+    $resp = Invoke-WebRequest -Uri "$endpoint/account/collections/${collectionName}?api-version=2019-11-01-preview" -Headers @{ Authorization = "Bearer $purviewToken"; 'Content-Type' = 'application/json' } -Method Put -Body $payload -UseBasicParsing -ErrorAction Stop
     $body = $resp.Content | ConvertFrom-Json -ErrorAction SilentlyContinue
     $collectionId = $body.name
     Log "Collection '$collectionName' created successfully (id=$collectionId)"

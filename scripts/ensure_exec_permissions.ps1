@@ -21,7 +21,7 @@ Get-ChildItem -Path scripts -Filter '*.sh' -File | ForEach-Object {
       Log "Added +x to $f"
       $changed++
     }
-  } catch { Log "Could not modify $f: $_" }
+  } catch { Log "Could not modify $($f): $($_)" }
 }
 Log "Completed. Files updated: $changed"
 exit 0
