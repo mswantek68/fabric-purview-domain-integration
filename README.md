@@ -2,7 +2,10 @@
 
 ## 🚀 Overview
 
-This solution automates a Microsoft Fabric environment integrated with Microsoft Purview for data governance. It creates a domain aligned data platform including Fabric capacity, workspaces, domains, and Purview collections with automated governance integration.
+This solution automates a Microsoft Fabric environment integrated with Microsoft Purview for data governance. It creates a domain aligned data platform including Fabric capacity, workspaces, domains, and Purview collections with automated governance integration and **workspace-scoped scanning**.
+
+This solution features **dual script support** - both **PowerShell** and **Bash** implementations for maximum compatibility across different environments and preferences. The PowerShell implementation provides enhanced error handling and cross-platform support via PowerShell Core.
+
 This idea will be integrated into a larger deployment. Main point to keep in mind, I am using very atomic scripts to allow for endless configurations as I learn more about how to integrate source systems into Fabric (ie: Databricks, Oracle, SAP, etc.) and Purview domains. This should allow for a custom yaml file that can be adapted for each domain created.
 
 ### What Gets Deployed
@@ -11,8 +14,9 @@ This idea will be integrated into a larger deployment. Main point to keep in min
 - **Fabric Workspace**: Collaborative workspace for data engineering and analytics
 - **Fabric Domain**: Organized data domain structure (governance-focused)
 - **Purview Collections**: Data catalog collections for governance and discovery
-- **Fabric Datasources**: Registered datasources for scanning and governance
-- **Lakehouses**: Storage and compute layers for data lakehouse architecture
+- **Fabric Datasources**: **Registered Fabric data source in Purview** for governance integration
+- **Lakehouses**: Bronze, Silver, and Gold data lakehouse architecture
+- **Workspace-Scoped Scans**: **Purview scans of the Fabric data source** configured to target only the created workspace, ensuring precise data discovery and governance
 
 ## 🏗️ Architecture
 
@@ -70,6 +74,16 @@ This idea will be integrated into a larger deployment. Main point to keep in min
    curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
    ```
 
+3. **PowerShell Core** (for PowerShell script execution)
+   ```bash
+   # Install PowerShell Core on Linux/macOS
+   curl -sSL https://raw.githubusercontent.com/PowerShell/PowerShell/master/tools/install-powershell.sh | bash
+   
+   # Or use package managers:
+   # Ubuntu: sudo apt install powershell
+   # macOS: brew install powershell
+   ```
+
 ### Required Authentication & Permissions
 
 ⚠️ **CRITICAL**: You must authenticate with **both** Azure CLI and Azure Developer CLI:
@@ -94,7 +108,7 @@ Your Azure account needs the following permissions:
 
 ### Existing Resources Required
 
-- **Microsoft Purview Account**: You must have an existing Purview account
+- **Microsoft Purview Account**: You must have an existing Purview account. It should be registered as the tenant default.
   - Update the `purviewAccountName` parameter in `infra/main.bicepparam`
   - Ensure your account has appropriate Purview permissions
 
@@ -127,9 +141,14 @@ param fabricCapacitySKU = 'F64'  // Adjust based on your needs
 az login
 azd auth login
 
+# 🚨 ALWAYS preview first to catch issues early!
+azd provision --preview
+
 # Deploy the solution
 azd up
 ```
+
+**💡 Pro Tip**: Always run `azd provision --preview` first! This catches configuration errors, validates Bicep compilation, and shows you exactly what resources will be created without making any actual changes. It's a lifesaver for catching issues before deployment.
 
 ## 🔧 Configuration
 
@@ -151,6 +170,44 @@ The solution supports extensive customization through parameters:
 - **Fabric Settings**: Capacity size, workspace names, domain structure
 - **Purview Integration**: Collection names, governance domains, parent relationships
 - **Admin Access**: Fabric administrators, Purview data stewards
+- **Scan Scoping**: Workspace-specific scanning configuration
+
+### Workspace-Scoped Scanning
+
+The solution implements **precise workspace scoping** for Purview scans:
+
+#### How It Works
+1. **Fabric Data Source Registration**: The entire Fabric tenant is **first registered** as a data source in Purview (prerequisite)
+2. **Dynamic Workspace Detection**: Scripts automatically detect the created workspace ID
+3. **Scoped Scan Configuration**: Purview scan is configured to target only the specific workspace within the **registered data source**
+4. **Asset-Aware Timing**: Scan executes after lakehouses are created to ensure complete asset discovery
+5. **Scan Execution**: The scan **locates the registered data source** and catalogs only the scoped workspace assets
+6. **Data Cataloging**: Discovered assets are cataloged in Purview with proper lineage and metadata
+
+**Critical Dependency**: The data source **must be registered first** before any scan can locate and catalog assets. Without registration, Purview scans cannot find the Fabric workspace.
+
+#### Benefits
+- 🎯 **Precise Governance**: Only scan the workspace you created within the registered Fabric data source
+- 🚀 **Faster Scanning**: Reduced scan time by focusing on relevant assets
+- 🔒 **Security**: Avoids accidental discovery of sensitive workspaces
+- 📊 **Clean Results**: Clear, focused data catalog without noise
+- 🔍 **Complete Discovery**: All workspace assets (lakehouses, datasets, reports) are cataloged in Purview
+
+#### Scan Configuration
+```json
+{
+  "properties": {
+    "includePersonalWorkspaces": false,
+    "scanScope": {
+      "type": "PowerBIScanScope",
+      "workspaces": [
+        {"id": "your-workspace-id"}
+      ]
+    }
+  },
+  "kind": "PowerBIMsi"
+}
+```
 
 ## 📚 Solution Components
 
@@ -162,19 +219,33 @@ The solution supports extensive customization through parameters:
 
 ### Automation Scripts
 
-The solution uses atomic scripts for modular, testable automation:
+The solution provides **dual script implementations** for maximum compatibility:
+
+#### PowerShell Scripts (Recommended)
+- **Cross-platform**: Works on Windows, Linux, and macOS via PowerShell Core
+- **Enhanced error handling**: Detailed error reporting and recovery
+- **Consistent API interaction**: Robust Azure API integration
+- **Current default**: Used by `azure.yaml` configuration
+
+#### Bash Scripts (Alternative)
+- **Linux/macOS native**: Traditional shell scripting
+- **Lightweight**: Minimal dependencies
+- **POSIX compatible**: Works across Unix-like systems
 
 | Script | Purpose | Dependencies |
 |--------|---------|--------------|
-| `ensure_active_capacity.sh` | Validate Fabric capacity | Fabric Admin |
-| `create_fabric_domain.sh` | Create Fabric governance domain | Fabric Admin |
-| `create_fabric_workspace.sh` | Create Fabric workspace | Fabric Capacity |
-| `assign_workspace_to_domain.sh` | Assign workspace to domain | Workspace + Domain |
-| `create_purview_collection.sh` | Create Purview collection | Purview Admin |
-| `register_fabric_datasource.sh` | Register Fabric as datasource | Collection |
-| `setup_fabric_scan_guidance.sh` | Configure scan guidance | Datasource |
-| `connect_log_analytics.sh` | Connect monitoring | Log Analytics |
-| `create_lakehouses.sh` | Create lakehouse storage | Workspace |
+| `ensure_active_capacity.*` | Validate Fabric capacity | Fabric Admin |
+| `create_fabric_domain.*` | Create Fabric governance domain | Fabric Admin |
+| `create_fabric_workspace.*` | Create Fabric workspace | Fabric Capacity |
+| `assign_workspace_to_domain.*` | Assign workspace to domain | Workspace + Domain |
+| `create_purview_collection.*` | Create Purview collection | Purview Admin |
+| `register_fabric_datasource.*` | **Register Fabric as data source in Purview** (prerequisite for scanning) | Collection |
+| `setup_fabric_scan_guidance.*` | Configure scan guidance | Datasource |
+| `create_lakehouses.*` | Create bronze/silver/gold lakehouses | Workspace |
+| `trigger_purview_scan_for_fabric_workspace.*` | **Locate registered data source and execute workspace-scoped scan** | Lakehouses + **Registered Datasource** |
+| `connect_log_analytics.*` | Connect monitoring | Log Analytics |
+
+**Key Feature**: The solution follows a **strict dependency order**: **first registers the entire Fabric tenant as a data source in Purview**, then creates a **scoped scan** that can successfully locate and scan only the specific workspace created by the deployment. This ensures comprehensive data governance while maintaining precise control over what gets scanned and cataloged.
 
 ### Atomic Script Architecture
 
@@ -183,6 +254,21 @@ Each script is designed to be:
 - **Idempotent**: Safe to run multiple times
 - **Error-resilient**: Comprehensive error handling
 - **Observable**: Detailed logging and status reporting
+- **Cross-platform**: Available in both PowerShell (.ps1) and Bash (.sh) versions
+
+### Execution Order & Workspace Scoping
+
+The solution follows a **strict execution order** to ensure proper dependency management:
+
+1. **Infrastructure Setup**: Capacity → Domain → Workspace → Collection
+2. **Data Source Registration**: **Register Fabric as data source in Purview** (enables scanning)
+3. **Asset Creation**: Lakehouses (bronze, silver, gold)
+4. **Data Governance**: **Workspace-scoped Purview scan execution** (locates registered data source and scans workspace)
+
+**Critical Dependencies**: 
+- The Fabric data source **must be registered in Purview first** before any scan can locate it
+- The Purview scan is executed **after** lakehouse creation to ensure all workspace assets are discoverable
+- Scans can only find and catalog assets from **registered data sources**
 
 ## 🔍 Monitoring & Troubleshooting
 
@@ -218,18 +304,47 @@ tail -f ~/.azd/<env-name>/logs/*.log
    - Check the Purview account name is correct
    - Ensure the account exists and is accessible
 
+4. **PowerShell Execution Issues**
+   ```bash
+   # Verify PowerShell Core installation
+   pwsh --version
+   
+   # Check PowerShell execution policy (Windows)
+   pwsh -c "Get-ExecutionPolicy"
+   ```
+
+5. **Workspace Scoping Issues**
+   - Verify workspace was created before scan execution
+   - Check `/tmp/fabric_workspace.env` for workspace ID
+   - Ensure lakehouses exist before scanning
+
 ### Diagnostic Commands
 
 ```bash
+# 🚨 ALWAYS preview before deploying!
+azd provision --preview
+
 # Check deployment status
 azd show
 
 # List environment variables
 azd env get-values
 
-# Test individual scripts
+# Test individual PowerShell scripts
+pwsh ./scripts/create_purview_collection.ps1
+
+# Test individual Bash scripts (alternative)
 ./scripts/create_purview_collection.sh
+
+# Check workspace scoping
+cat /tmp/fabric_workspace.env
+cat /tmp/fabric_scan_config.json
+
+# Verify scan results
+# (Check Purview portal: Data Map → Sources → Fabric → Scans)
 ```
+
+**⚡ Best Practice**: Use `azd provision --preview` religiously! It validates your configuration, checks Bicep compilation, and shows resource changes without any risk. It would have caught the parameter issue instantly.
 
 ## 🤝 Contributing
 
