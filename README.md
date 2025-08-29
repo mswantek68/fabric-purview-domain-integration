@@ -141,9 +141,14 @@ param fabricCapacitySKU = 'F64'  // Adjust based on your needs
 az login
 azd auth login
 
+# 🚨 ALWAYS preview first to catch issues early!
+azd provision --preview
+
 # Deploy the solution
 azd up
 ```
+
+**💡 Pro Tip**: Always run `azd provision --preview` first! This catches configuration errors, validates Bicep compilation, and shows you exactly what resources will be created without making any actual changes. It's a lifesaver for catching issues before deployment.
 
 ## 🔧 Configuration
 
@@ -316,6 +321,9 @@ tail -f ~/.azd/<env-name>/logs/*.log
 ### Diagnostic Commands
 
 ```bash
+# 🚨 ALWAYS preview before deploying!
+azd provision --preview
+
 # Check deployment status
 azd show
 
@@ -335,6 +343,8 @@ cat /tmp/fabric_scan_config.json
 # Verify scan results
 # (Check Purview portal: Data Map → Sources → Fabric → Scans)
 ```
+
+**⚡ Best Practice**: Use `azd provision --preview` religiously! It validates your configuration, checks Bicep compilation, and shows resource changes without any risk. It would have caught the parameter issue instantly.
 
 ## 🤝 Contributing
 
