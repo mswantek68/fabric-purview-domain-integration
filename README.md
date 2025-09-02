@@ -1,8 +1,8 @@
-# Microsoft Fabric + Purview Data Governance Accelerator
+# Microsoft Fabric + Purview + AI Search Integration Accelerator
 
 ## 🚀 Overview
 
-This solution automates a Microsoft Fabric environment integrated with Microsoft Purview for data governance. It creates a domain aligned data platform including Fabric capacity, workspaces, domains, and Purview collections with automated governance integration and **workspace-scoped scanning**.
+This solution automates a Microsoft Fabric environment integrated with Microsoft Purview for data governance **and Azure AI Search for document processing**. It creates a domain aligned data platform including Fabric capacity, workspaces, domains, Purview collections with automated governance integration, **workspace-scoped scanning**, and **OneLake document indexing for AI Search**.
 
 This solution features **dual script support** - both **PowerShell** and **Bash** implementations for maximum compatibility across different environments and preferences. The PowerShell implementation provides enhanced error handling and cross-platform support via PowerShell Core.
 
@@ -15,8 +15,9 @@ This idea will be integrated into a larger deployment. Main point to keep in min
 - **Fabric Domain**: Organized data domain structure (governance-focused)
 - **Purview Collections**: Data catalog collections for governance and discovery
 - **Fabric Datasources**: **Registered Fabric data source in Purview** for governance integration
-- **Lakehouses**: Bronze, Silver, and Gold data lakehouse architecture
+- **Lakehouses**: Bronze, Silver, and Gold data lakehouse architecture with **organized document folders**
 - **Workspace-Scoped Scans**: **Purview scans of the Fabric data source** configured to target only the created workspace, ensuring precise data discovery and governance
+- **🆕 AI Search Integration**: Ready for OneLake document indexing with automated AI Search indexers
 
 ## 🏗️ Architecture
 
@@ -148,7 +149,191 @@ azd provision --preview
 azd up
 ```
 
-**💡 Pro Tip**: Always run `azd provision --preview` first! This catches configuration errors, validates Bicep compilation, and shows you exactly what resources will be created without making any actual changes. It's a lifesaver for catching issues before deployment.
+## 📄 Document Processing with AI Search + OneLake
+
+### 🎯 AI Search Integration Overview
+
+After deploying the Fabric infrastructure, you can set up **automated document processing** using **Azure AI Search OneLake indexers**. This provides native integration between your Fabric lakehouse documents and AI Search, making documents searchable and available in AI Foundry.
+
+### � Document Folder Structure
+
+The bronze lakehouse is automatically created with an organized folder structure for different document types:
+
+```
+bronze/
+└── Files/
+    └── documents/
+        ├── contracts/     # Contract documents and legal agreements
+        ├── reports/       # Business reports and analytics  
+        ├── policies/      # Policy and procedure documents
+        └── manuals/       # User guides and technical manuals
+```
+
+### 🔄 Complete Document Processing Workflow
+
+#### Phase 1: Infrastructure Setup (Automatic)
+```bash
+# Deploy the complete infrastructure
+azd up
+```
+
+**What happens automatically:**
+✅ Fabric capacity, workspace, and domain created  
+✅ Purview collections and governance configured  
+✅ Bronze lakehouse created with document folder structure  
+✅ Workspace-scoped Purview scanning configured  
+✅ Ready for document uploads and AI Search integration  
+
+#### Phase 2: AI Search Setup (Manual - Run Once)
+
+**Prerequisites**: You need existing AI Search and AI Foundry services. Update the bicep parameters:
+
+```bash
+# During azd up, you'll be prompted for:
+aiSearchName: "your-existing-aisearch-service"
+aiFoundryName: "your-existing-aifoundry-service"
+
+# Optional: For cross-subscription or private endpoint scenarios
+aiSearchSubscriptionId: "different-subscription-id"  # Leave empty if same subscription
+aiSearchCustomEndpoint: "https://aisearch.privatelink.search.windows.net"  # For private endpoints
+```
+
+**Set up RBAC permissions** (run once):
+```powershell
+# Configure managed identity permissions for AI services
+./scripts/setup_ai_services_rbac.ps1 `
+  -ExecutionManagedIdentityPrincipalId "your-managed-identity-principal-id" `
+  -AISearchName "your-aisearch-service" `
+  -AIFoundryName "your-aifoundry-service"
+```
+
+#### Phase 3: Document Upload (As Needed)
+
+Upload documents to the appropriate folders in the bronze lakehouse:
+
+```
+📁 Upload to: bronze/Files/documents/contracts/
+   - contract1.pdf
+   - agreement2.docx
+   - terms3.pdf
+
+📁 Upload to: bronze/Files/documents/reports/
+   - quarterly-report.pdf
+   - analysis.xlsx
+   - presentation.pptx
+```
+
+#### Phase 4: AI Search Indexer Setup (Run Once Per Document Category)
+
+**Option A: Set up all document categories at once**
+```powershell
+# Create OneLake indexers for all document types
+./scripts/setup_document_indexers.ps1 -Categories "all" -ScheduleIntervalMinutes 30
+```
+
+**Option B: Set up specific document categories**
+```powershell
+# Set up indexers for contracts and reports only
+./scripts/setup_document_indexers.ps1 -Categories "contracts","reports" -ScheduleIntervalMinutes 60
+```
+
+**Option C: Set up individual indexers manually**
+```powershell
+# Create indexer for contracts folder
+./scripts/create_onelake_indexer.ps1 `
+  -FolderPath "Files/documents/contracts" `
+  -IndexName "contracts-index" `
+  -ScheduleIntervalMinutes 30
+
+# Create indexer for reports folder  
+./scripts/create_onelake_indexer.ps1 `
+  -FolderPath "Files/documents/reports" `
+  -IndexName "reports-index" `
+  -ScheduleIntervalMinutes 60
+```
+
+#### Phase 5: AI Foundry Integration (Optional)
+
+Connect search indexes to AI Foundry for use in AI playground:
+
+```powershell
+# Connect contracts index to AI Foundry
+./scripts/connect_search_to_ai_foundry.ps1 -IndexName "contracts-index"
+
+# Connect reports index to AI Foundry  
+./scripts/connect_search_to_ai_foundry.ps1 -IndexName "reports-index"
+```
+
+### 🤖 How OneLake Indexers Work
+
+**Key Benefits:**
+- ✅ **Automatic Change Detection**: Indexers monitor OneLake folders continuously
+- ✅ **Scheduled Processing**: Configurable schedule (default: 60 minutes)
+- ✅ **Native Integration**: Uses Microsoft's OneLake connector (recommended approach)
+- ✅ **Managed Identity**: Secure authentication without API keys
+- ✅ **Incremental Updates**: Only processes new/changed documents
+- ✅ **File Type Support**: PDF, DOCX, PPTX, XLSX, TXT, HTML, JSON
+
+**Automatic Processing:**
+1. 📄 **Document Upload**: You upload documents to OneLake folders
+2. ⏰ **Scheduled Detection**: OneLake indexer runs on schedule (e.g., every 30 minutes)
+3. 🔍 **Change Detection**: Indexer detects new/modified documents automatically
+4. 📖 **Content Extraction**: AI Search extracts text and metadata natively
+5. 🔎 **Index Update**: Documents become searchable in AI Search
+6. 🤖 **AI Foundry Ready**: Documents available in AI playground
+
+**No Manual Triggering Needed!** Once indexers are set up, they run automatically on the configured schedule.
+
+### 📊 Monitoring Document Processing
+
+**Check indexer status:**
+```powershell
+# View indexer status in Azure portal
+# Navigate to: AI Search service → Indexers → <indexer-name>
+
+# Or use Azure CLI
+az search indexer show --service-name "your-aisearch" --name "contracts-indexer"
+```
+
+**Indexer execution information:**
+- **Run History**: See when indexers last ran and results
+- **Document Count**: Number of documents processed
+- **Errors**: Any processing failures and details
+- **Next Run**: When the indexer will run next
+
+### 🔧 Advanced Configuration
+
+**Custom scheduling:**
+```powershell
+# Run indexer every 15 minutes for high-frequency updates
+./scripts/create_onelake_indexer.ps1 -ScheduleIntervalMinutes 15
+
+# Run indexer every 4 hours for batch processing
+./scripts/create_onelake_indexer.ps1 -ScheduleIntervalMinutes 240
+```
+
+**Manual indexer execution:**
+```powershell
+# Trigger immediate indexer run (for testing)
+az search indexer run --service-name "your-aisearch" --name "contracts-indexer"
+```
+
+### 🚨 Important Notes
+
+**When to Run What:**
+
+| Action | When | Frequency | Purpose |
+|--------|------|-----------|---------|
+| `azd up` | Initial setup | Once | Deploy infrastructure |
+| `setup_ai_services_rbac.ps1` | After azd up | Once | Configure RBAC permissions |
+| `setup_document_indexers.ps1` | After uploading documents | Once per category | Create OneLake indexers |
+| `connect_search_to_ai_foundry.ps1` | After indexers created | Once per index | Enable AI playground |
+| **Document Upload** | Ongoing | As needed | Add content to process |
+| **OneLake Indexers** | **Automatic** | **Scheduled** | **No manual intervention needed** |
+
+**⚡ Key Point**: OneLake indexers run **automatically** on their configured schedule. You don't need to trigger them manually - they detect and process new documents automatically!
+
+**💡 Pro Tip**: Start with longer intervals (60+ minutes) and adjust based on your document upload patterns. More frequent indexing uses more compute resources.
 
 ## 🔧 Configuration
 
@@ -241,9 +426,14 @@ The solution provides **dual script implementations** for maximum compatibility:
 | `create_purview_collection.*` | Create Purview collection | Purview Admin |
 | `register_fabric_datasource.*` | **Register Fabric as data source in Purview** (prerequisite for scanning) | Collection |
 | `setup_fabric_scan_guidance.*` | Configure scan guidance | Datasource |
-| `create_lakehouses.*` | Create bronze/silver/gold lakehouses | Workspace |
+| `create_lakehouses.*` | Create bronze/silver/gold lakehouses **with document folder structure** | Workspace |
 | `trigger_purview_scan_for_fabric_workspace.*` | **Locate registered data source and execute workspace-scoped scan** | Lakehouses + **Registered Datasource** |
 | `connect_log_analytics.*` | Connect monitoring | Log Analytics |
+| **🆕 AI Search Integration Scripts** | | |
+| `setup_ai_services_rbac.ps1` | **Configure RBAC permissions for AI Search/Foundry access** | Managed Identity |
+| `create_onelake_indexer.ps1` | **Create OneLake indexer for automatic document processing** | AI Search + RBAC |
+| `setup_document_indexers.ps1` | **Bulk setup OneLake indexers for standard document categories** | AI Search + RBAC |
+| `connect_search_to_ai_foundry.ps1` | **Connect AI Search indexes to AI Foundry playground** | AI Search Indexes |
 
 **Key Feature**: The solution follows a **strict dependency order**: **first registers the entire Fabric tenant as a data source in Purview**, then creates a **scoped scan** that can successfully locate and scan only the specific workspace created by the deployment. This ensures comprehensive data governance while maintaining precise control over what gets scanned and cataloged.
 
