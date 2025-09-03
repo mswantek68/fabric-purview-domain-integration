@@ -37,7 +37,7 @@ param fabricCapacityName string = 'swantestcapacity0'
   'F512'
   'F1024'
   'F2048'
-])s
+])
 param fabricCapacitySKU string = 'F64'
 @description('Admin principal UPNs or objectIds to assign to the capacity (optional).')
 param capacityAdminMembers array = ['admin@MngEnv282784.onmicrosoft.com']
