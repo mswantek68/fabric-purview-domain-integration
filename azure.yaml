@@ -21,16 +21,19 @@ hooks:
     - run: ./scripts/register_fabric_datasource.ps1
       interactive: false
       shell: pwsh
-    - run: ./scripts/setup_fabric_scan_guidance.ps1
-      interactive: false
-      shell: pwsh
     - run: ./scripts/connect_log_analytics.ps1
       interactive: false
       shell: pwsh
     - run: ./scripts/create_lakehouses.ps1
       interactive: false
       shell: pwsh
+    - run: ./scripts/postprovision_onelake_indexing.ps1
+      interactive: false
+      shell: pwsh
     - run: ./scripts/trigger_purview_scan_for_fabric_workspace.ps1
+      interactive: false
+      shell: pwsh
+    - run: ./scripts/setup_ai_search_auto.ps1
       interactive: false
       shell: pwsh
 metadata:

@@ -46,7 +46,25 @@ param purviewGovernanceDomainType string = 'Data Domain'
 @description('Optional: Parent governance domain ID (GUID) in Unified Catalog; empty for top-level')
 param purviewGovernanceDomainParentId string = ''
 
-
+// Optional parameters for AI Search/Foundry integration and lakehouse configuration
+@description('Optional: AI Search service name')
+param aiSearchName string = ''
+@description('Optional: AI Foundry (Cognitive Services) name')
+param aiFoundryName string = ''
+@description('Optional: AI Search resource group')
+param aiSearchResourceGroup string = ''
+@description('Optional: AI Search subscription id')
+param aiSearchSubscriptionId string = ''
+@description('Optional: AI Foundry resource group')
+param aiFoundryResourceGroup string = ''
+@description('Optional: AI Foundry subscription id')
+param aiFoundrySubscriptionId string = ''
+@description('Optional: Execution Managed Identity Principal ID used for RBAC configuration')
+param executionManagedIdentityPrincipalId string = ''
+@description('Comma separated lakehouse names (defaults to bronze,silver,gold)')
+param lakehouseNames string = 'bronze,silver,gold'
+@description('Default document lakehouse name to use for indexers')
+param documentLakehouseName string = 'bronze'
 
 // Deploy Fabric Capacity
 module capacity 'br/public:avm/res/fabric/capacity:0.1.1' = {
@@ -81,3 +99,14 @@ output purviewGovernanceDomainParentId string = purviewGovernanceDomainParentId
 output purviewDataMapDomainName string = purviewDataMapDomainName
 output purviewDataMapDomainDescription string = purviewDataMapDomainDescription
 output purviewDataMapParentCollectionId string = purviewDataMapParentCollectionId
+
+// New AI service and lakehouse outputs for scripts to consume
+output aiSearchName string = aiSearchName
+output aiFoundryName string = aiFoundryName
+output aiSearchResourceGroup string = aiSearchResourceGroup
+output aiSearchSubscriptionId string = aiSearchSubscriptionId
+output aiFoundryResourceGroup string = aiFoundryResourceGroup
+output aiFoundrySubscriptionId string = aiFoundrySubscriptionId
+output executionManagedIdentityPrincipalId string = executionManagedIdentityPrincipalId
+output lakehouseNames string = lakehouseNames
+output documentLakehouseName string = documentLakehouseName
