@@ -245,7 +245,7 @@ if ($names -contains "bronze") {
           # We'll document the expected structure for users
           Log "Folder structure planned: $folderPath"
         } catch {
-          Warn "Could not create folder $folderPath: $_"
+          Warn "Could not create folder ${folderPath}: $($_.Exception.Message)"
         }
       }
       
@@ -289,7 +289,7 @@ For more information, see the project documentation.
     }
     
   } catch {
-    Warn "Error setting up bronze lakehouse folder structure: $_"
+    Warn "Error setting up bronze lakehouse folder structure: $($_.Exception.Message)"
   }
 }
 

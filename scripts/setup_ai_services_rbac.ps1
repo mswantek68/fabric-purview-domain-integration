@@ -87,6 +87,29 @@ function Get-ResourceId {
   $targetSub = if ($SubscriptionId -and $SubscriptionId -ne "") { $SubscriptionId } else { $CurrentContext.SubscriptionId }
   $targetRg = if ($ResourceGroup -and $ResourceGroup -ne "") { $ResourceGroup } else { $CurrentContext.ResourceGroup }
   
+  # If we don't have explicit subscription/resource group, try to find the resource
+  if (-not $targetSub -or -not $targetRg) {
+    Write-Log "Resource location not provided, searching for $ResourceName..."
+    
+    try {
+      # Search across all accessible subscriptions
+      $resourceInfo = & az resource list --name $ResourceName --resource-type $ResourceType --query "[0]" -o json 2>$null
+      if ($resourceInfo -and $resourceInfo -ne "null") {
+        $resource = $resourceInfo | ConvertFrom-Json
+        $resourceId = $resource.id
+        
+        # Parse subscription and resource group from resource ID
+        if ($resourceId -match '/subscriptions/([^/]+)/resourceGroups/([^/]+)/') {
+          $targetSub = $Matches[1]
+          $targetRg = $Matches[2]
+          Write-Log "Found $ResourceName in subscription $targetSub, resource group $targetRg"
+        }
+      }
+    } catch {
+      Write-Log "Failed to search for resource: $($_.Exception.Message)" "WARN"
+    }
+  }
+  
   if (-not $targetSub -or -not $targetRg) {
     throw "Cannot determine subscription ID or resource group for $ResourceName"
   }

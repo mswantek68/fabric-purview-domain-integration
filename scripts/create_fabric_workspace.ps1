@@ -108,11 +108,13 @@ if ($CapacityId) {
       Fail "No capacities returned from API"
     }
   } catch { 
-    Fail "Failed to query capacities: $_"
+    Fail "Failed to query capacities: $($_.Exception.Message)"
   }
   
   if ($capacityGuid) {
     Log "Resolved capacity GUID: $capacityGuid"
+    # Save capacity GUID for subsequent scripts
+    "$capacityGuid" | Out-File -FilePath '/tmp/fabric_capacity_guid.txt' -Encoding UTF8
   } else {
     Fail "Could not resolve capacity GUID for '$capName'"
   }
@@ -142,7 +144,7 @@ if ($workspaceId) {
       } else {
         Fail "Workspace capacity assignment verification failed - workspace still has no capacity"
       }
-    } catch { Fail "Capacity reassign failed: $_" }
+    } catch { Fail "Capacity reassign failed: $($_.Exception.Message)" }
   } else { Fail 'No capacity GUID resolved; cannot proceed without capacity assignment.' }
   # assign admins
   if ($AdminUPNs) {
@@ -173,7 +175,7 @@ try {
   $body = $resp.Content | ConvertFrom-Json -ErrorAction SilentlyContinue
   $workspaceId = $body.id
   Log "Created workspace id: $workspaceId"
-} catch { Fail "Workspace creation failed: $_" }
+} catch { Fail "Workspace creation failed: $($_.Exception.Message)" }
 
 # Assign to capacity
 if ($capacityGuid) {
@@ -190,7 +192,7 @@ if ($capacityGuid) {
     } else {
       Fail "Workspace capacity assignment verification failed - workspace still has no capacity"
     }
-  } catch { Fail "Capacity assignment failed: $_" }
+  } catch { Fail "Capacity assignment failed: $($_.Exception.Message)" }
 } else { Fail 'No capacity GUID resolved; cannot create workspace without capacity assignment.' }
 
 # Add admins

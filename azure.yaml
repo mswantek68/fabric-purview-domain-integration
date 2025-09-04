@@ -27,6 +27,12 @@ hooks:
     - run: ./scripts/create_lakehouses.ps1
       interactive: false
       shell: pwsh
+    - run: ./scripts/materialize_document_folders.ps1
+      interactive: false
+      shell: pwsh
+    - run: ./scripts/grant_fabric_access.ps1
+      interactive: false
+      shell: pwsh
     - run: ./scripts/trigger_purview_scan_for_fabric_workspace.ps1
       interactive: false
       shell: pwsh

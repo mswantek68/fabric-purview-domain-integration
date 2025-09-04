@@ -23,7 +23,7 @@ RBAC Requirements for AI Search and AI Foundry Integration:
 
 // Parameters for resource group and subscription
 @description('Fabric Capacity name. Cannot have dashes or underscores!')
-param fabricCapacityName string = 'swantestcapacity0'
+param fabricCapacityName string = 'swantestcapacity3'
 @description('Fabric capacity SKU (F-series). Available SKUs: F2, F4, F8, F16, F32, F64, F128, F256, F512, F1024, F2048.')
 @allowed([
   'F2'
@@ -43,21 +43,21 @@ param fabricCapacitySKU string = 'F64'
 param capacityAdminMembers array = ['admin@MngEnv282784.onmicrosoft.com']
 // Optional: workspace name passed via azd env or parameters (used by post-provision script, not ARM)
 @description('Desired Fabric workspace display name (workspace is currently not deployable via ARM as of Aug 2025).')
-param fabricWorkspaceName string = 'swantest-ws0'
+param fabricWorkspaceName string = 'swantest-ws3'
 @description('Desired Fabric Data Domain name (governance domain). Used only by post-provision script; Fabric Domains not deployable via ARM yet.')
-param domainName string = 'swantest-domain0'
+param domainName string = 'swantest-domain3'
 @description('Name of the existing Purview account for governance integration')
 param purviewAccountName string = 'swantekpurview'
 
 // AI Search and AI Foundry parameters
 @description('Name of the existing AI Search service')
-param aiSearchName string = 'swantekaisearch'
+param aiSearchName string = 'aisearchswan2'
 @description('Subscription ID where the AI Search service is deployed (leave empty if same as current subscription)')
 param aiSearchSubscriptionId string = '48ab3756-f962-40a8-b0cf-b33ddae744bb'
 @description('Resource group where the AI Search service is deployed (leave empty if same as current resource group)')
 param aiSearchResourceGroup string = 'AI_Related'
 @description('Custom endpoint for AI Search (use if behind private endpoint, e.g., https://aisearch.privatelink.search.windows.net)')
-param aiSearchCustomEndpoint string = 'https://swantekaisearch.search.windows.net'
+param aiSearchCustomEndpoint string = 'https://aisearchswan2.search.windows.net'
 @description('Name of the existing AI Foundry service')
 param aiFoundryName string ='swantekFoundry1'
 @description('Subscription ID where the AI Foundry service is deployed (leave empty if same as current subscription)')
@@ -79,9 +79,9 @@ param documentCategories string = '{"contracts":"contracts","reports":"reports",
 
 // RBAC and Authentication parameters
 @description('Principal ID of the managed identity that will access AI Search (leave empty to skip RBAC assignments)')
-param executionManagedIdentityPrincipalId string = '0d60355b-dcae-4331-b55f-283d80aabde5'
+param executionManagedIdentityPrincipalId string = 'e86388dc-fbf7-40b1-92eb-d3a6bfb21db8'
 @description('Principal ID of the managed identity that will access AI Foundry (leave empty to skip RBAC assignments)')  
-param aiFoundryManagedIdentityPrincipalId string = '0d60355b-dcae-4331-b55f-283d80aabde5'
+param aiFoundryManagedIdentityPrincipalId string = '33544cdd-8ba0-4d66-92bc-2f73713097c9'
 
 // Purview Data Map domain parameters (technical collection hierarchy used by scans/RBAC)
 @description('Data Map domain (top-level collection) name used for automation. Distinct from Unified Catalog governance domain.')

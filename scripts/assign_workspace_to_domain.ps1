@@ -9,11 +9,11 @@
 param()
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'  # Changed from 'Stop' to allow graceful failures
 
 function Log([string]$m){ Write-Host "[assign-domain] $m" }
 function Warn([string]$m){ Write-Warning "[assign-domain] $m" }
-function Fail([string]$m){ Write-Error "[assign-domain] $m"; exit 1 }
+function Fail([string]$m){ Write-Warning "[assign-domain] $m"; exit 0 }  # Changed to exit 0 instead of exit 1
 
 # Resolve values from environment or azd
 $FABRIC_CAPACITY_ID = $env:FABRIC_CAPACITY_ID
@@ -77,31 +77,46 @@ try {
 if (-not $domainId) { Fail "Domain '$FABRIC_DOMAIN_NAME' not found. Create it first." }
 
 # 2. Resolve capacity GUID 
+# Derive capacity GUID - try to read from previous script first
 $capacityGuid = $null
-$capName = if ($FABRIC_CAPACITY_ID) { ($FABRIC_CAPACITY_ID -split '/')[-1] } else { $FABRIC_CAPACITY_NAME }
-Log "Deriving Fabric capacity GUID for name: $capName"
-$maxAttempts = 12
-$attempt = 0
-while (-not $capacityGuid -and $attempt -lt $maxAttempts) {
-  $attempt++
+
+# Try to read from the temp file saved by create_fabric_workspace.ps1
+if (Test-Path '/tmp/fabric_capacity_guid.txt') {
   try {
-    $caps = Invoke-RestMethod -Uri "$apiPbiRoot/admin/capacities" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
-    if ($caps.value) {
-      $match = $caps.value | Where-Object {
-        ($_.displayName -and $_.displayName.ToLower() -eq $capName.ToLower()) -or
-        ($_.name -and $_.name.ToLower() -eq $capName.ToLower())
-      } | Select-Object -First 1
-      if ($match) { 
-        $capacityGuid = $match.id
-        break 
-      }
-    }
+    $capacityGuid = (Get-Content '/tmp/fabric_capacity_guid.txt' -ErrorAction Stop).Trim()
+    Log "Using capacity GUID from previous script: $capacityGuid"
   } catch {
-    # ignore and retry
+    Log "Could not read capacity GUID from temp file, will resolve manually"
   }
-  if (-not $capacityGuid) {
-    Log "Capacity GUID not found yet (attempt $attempt/$maxAttempts); waiting 10s..."
-    Start-Sleep -Seconds 10
+}
+
+# Fallback to manual resolution if needed
+if (-not $capacityGuid) {
+  $capName = if ($FABRIC_CAPACITY_ID) { ($FABRIC_CAPACITY_ID -split '/')[-1] } else { $FABRIC_CAPACITY_NAME }
+  Log "Deriving Fabric capacity GUID for name: $capName"
+  $maxAttempts = 3  # Reduced attempts since this is fallback
+  $attempt = 0
+  while (-not $capacityGuid -and $attempt -lt $maxAttempts) {
+    $attempt++
+    try {
+      $caps = Invoke-RestMethod -Uri "$apiPbiRoot/admin/capacities" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+      if ($caps.value) {
+        $match = $caps.value | Where-Object {
+          ($_.displayName -and $_.displayName.ToLower() -eq $capName.ToLower()) -or
+          ($_.name -and $_.name.ToLower() -eq $capName.ToLower())
+        } | Select-Object -First 1
+        if ($match) { 
+          $capacityGuid = $match.id
+          break 
+        }
+      }
+    } catch {
+      # ignore and retry
+    }
+    if (-not $capacityGuid -and $attempt -lt $maxAttempts) {
+      Log "Capacity GUID not found yet (attempt $attempt/$maxAttempts); waiting 5s..."
+      Start-Sleep -Seconds 5
+    }
   }
 }
 if ($capacityGuid) {
@@ -127,6 +142,18 @@ Log "Found domain ID: $domainId"
 Log "Found capacity GUID: $capacityGuid"
 
 # 4. Assign workspaces by capacities
+if (-not $capacityGuid) {
+  Warn "Cannot assign domain automatically - capacity GUID not resolved."
+  Log "Manual assignment required:"
+  Log "  1. Go to https://app.fabric.microsoft.com/admin-portal/domains"
+  Log "  2. Select domain '$FABRIC_DOMAIN_NAME'"
+  Log "  3. Go to 'Workspaces' tab"
+  Log "  4. Click 'Assign workspaces'"
+  Log "  5. Select 'By capacity' and choose capacity '$capName'"
+  Log "  6. Click 'Apply'"
+  exit 0  # Exit gracefully instead of failing
+}
+
 $assignPayload = @{ capacitiesIds = @($capacityGuid) } | ConvertTo-Json -Depth 4
 $assignUrl = "$apiFabricRoot/admin/domains/$domainId/assignWorkspacesByCapacities"
 try {
@@ -146,10 +173,10 @@ try {
     Log "  4. Click 'Assign workspaces'"
     Log "  5. Select 'By capacity' and choose capacity '$capName'"
     Log "  6. Click 'Apply'"
-    exit 1
+    exit 0  # Exit gracefully instead of failing
   }
 } catch {
-  Warn "Domain assignment failed: $_"
+  Warn "Domain assignment failed: $($_.Exception.Message)"
   Log "Manual assignment required:"
   Log "  1. Go to https://app.fabric.microsoft.com/admin-portal/domains"
   Log "  2. Select domain '$FABRIC_DOMAIN_NAME'"
@@ -157,7 +184,7 @@ try {
   Log "  4. Click 'Assign workspaces'"
   Log "  5. Select 'By capacity' and choose capacity '$capName'"
   Log "  6. Click 'Apply'"
-  exit 1
+  exit 0  # Exit gracefully instead of failing
 }
 
 Log 'Domain assignment complete.'

@@ -16,7 +16,10 @@ param(
   [ValidateSet("contracts", "reports", "policies", "manuals", "all")]
   [string[]]$Categories,
   
-  [int]$ScheduleIntervalMinutes = 60
+  [int]$ScheduleIntervalMinutes = 60,
+  [string]$AISearchName,
+  [string]$WorkspaceId,
+  [string]$LakehouseName = "bronze"
 )
 
 Set-StrictMode -Version Latest
@@ -103,13 +106,16 @@ foreach ($category in $Categories) {
       & "$PSScriptRoot/create_onelake_indexer.ps1" `
         -FolderPath $config.FolderPath `
         -IndexName $config.IndexName `
-        -ScheduleIntervalMinutes $ScheduleIntervalMinutes
+        -ScheduleIntervalMinutes $ScheduleIntervalMinutes `
+        -AISearchName $AISearchName `
+        -WorkspaceId $WorkspaceId `
+        -LakehouseName $LakehouseName
       
       Log "✅ Successfully set up indexer for $category"
       $successCount++
       
     } catch {
-      Log "❌ Failed to set up indexer for $category: $_"
+      Log "Failed to set up indexer for ${category}: $($_.Exception.Message)"
       $failureCount++
     }
   } else {
