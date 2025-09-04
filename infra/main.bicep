@@ -1,3 +1,28 @@
+/*
+RBAC Requirements for AI Search and AI Foundry Integration:
+
+1. AI Search RBAC Roles (assign to execution managed identity):
+   - Search Service Contributor (7ca78c08-252a-4471-8644-bb5ff32d4ba0) - Full access to search service
+   - OR Search Index Data Contributor (8ebe5a00-799e-43f5-93ac-243d3dce84a7) - Index data operations
+   - OR Search Index Data Reader (1407120a-92aa-4202-b7e9-c0e197c71c8f) - Read-only access
+
+2. AI Foundry RBAC Roles (assign to execution managed identity):
+   - Cognitive Services Contributor (25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68) - Full access
+   - OR Cognitive Services User (a97b65f3-24c7-4388-baec-2e87135dc908) - Runtime access
+
+3. Cross-Subscription Access:
+   - If AI services are in different subscriptions, ensure managed identity has:
+   - Reader role on target subscription/resource group
+   - Appropriate service-specific roles on the AI resources
+
+4. Private Endpoint Considerations:
+   - Network access from execution environment to private endpoints
+   - Private DNS zone configuration
+   - VNet peering or connectivity if needed
+*/
+
+
+
 // Parameters for resource group and subscription
 @description('Fabric Capacity name. Cannot have dashes or underscores!')
 param fabricCapacityName string = 'defaultcapacity'
