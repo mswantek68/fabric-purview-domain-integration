@@ -30,8 +30,23 @@ if (-not $LakehouseNames) {
   if (-not $LakehouseNames) { $LakehouseNames = 'bronze,silver,gold' }
 }
 
+# Try to read workspace name/id from azd outputs (main.bicep emits desiredFabricWorkspaceName)
+if ((-not $WorkspaceName) -or (-not $WorkspaceId)) {
+  if (Test-Path '/tmp/azd-outputs.json') {
+    try {
+      $outputs = Get-Content '/tmp/azd-outputs.json' | ConvertFrom-Json
+      if ($outputs.desiredFabricWorkspaceName) { $WorkspaceName = $outputs.desiredFabricWorkspaceName.value }
+      if ($outputs.fabricWorkspaceId) { $WorkspaceId = $outputs.fabricWorkspaceId.value }
+      if ($WorkspaceName) { Log "Using Fabric workspace name from azd outputs: $WorkspaceName" }
+      if ($WorkspaceId) { Log "Using Fabric workspace id from azd outputs: $WorkspaceId" }
+    } catch {
+      # ignore parse errors
+    }
+  }
+}
+
 # Fallback: read workspace id/name from /tmp/fabric_workspace.env if present (postprovision execution may not have env vars set)
-if ((-not $WorkspaceId) -or (-not $WorkspaceName)) {
+if ((-not $WorkspaceId) -and (-not $WorkspaceName)) {
   if (Test-Path '/tmp/fabric_workspace.env') {
     Get-Content '/tmp/fabric_workspace.env' | ForEach-Object {
       if ($_ -match '^FABRIC_WORKSPACE_ID=(.+)$') { $WorkspaceId = $Matches[1].Trim() }
@@ -229,36 +244,6 @@ if ($names -contains "bronze") {
     if ($bronzeLakehouse) {
       Log "Found bronze lakehouse: $($bronzeLakehouse.id)"
       
-      # Create document folders using OneLake file system API
-      $documentFolders = @(
-        "Files/documents",
-        "Files/documents/contracts", 
-        "Files/documents/reports",
-        "Files/documents/policies",
-        "Files/documents/manuals"
-      )
-      
-      foreach ($folderPath in $documentFolders) {
-        try {
-          # Note: Fabric doesn't have a direct API to create folders
-          # Folders are created implicitly when files are uploaded
-          # We'll document the expected structure for users
-          Log "Folder structure planned: $folderPath"
-        } catch {
-          Warn "Could not create folder $folderPath: $_"
-        }
-      }
-      
-      # Attempt to create a small placeholder file in each folder to virtualize it
-      foreach ($folderPath in $documentFolders) {
-        try {
-          Log "Virtualizing folder: $folderPath"
-          & "$PSScriptRoot/virtualize_onelake_folder.ps1" -WorkspaceId $WorkspaceId -LakehouseName $name -FolderPath $folderPath -Content $readmeContent
-        } catch {
-          Warn "Virtualization failed for $folderPath: $_"
-        }
-      }
-+
       # Create a README file to establish the folder structure
       $readmeContent = @"
 # Bronze Lakehouse Document Structure
@@ -291,6 +276,38 @@ This lakehouse is organized with the following folder structure for AI Search in
 For more information, see the project documentation.
 "@
       
+      # Create document folders using OneLake file system API
+      $documentFolders = @(
+        "Files/documents",
+        "Files/documents/contracts", 
+        "Files/documents/reports",
+        "Files/documents/policies",
+        "Files/documents/manuals"
+      )
+      
+      foreach ($folderPath in $documentFolders) {
+        try {
+          # Note: Fabric doesn't have a direct API to create folders
+          # Folders are created implicitly when files are uploaded
+          # We'll document the expected structure for users
+          Log "Folder structure planned: $folderPath"
+        } catch {
+          $errorMsg = $_.Exception.Message
+          Warn "Could not create folder $folderPath`: $errorMsg"
+        }
+      }
+      
+      # Attempt to create a small placeholder file in each folder to virtualize it
+      foreach ($folderPath in $documentFolders) {
+        try {
+          Log "Virtualizing folder: $folderPath"
+          & "$PSScriptRoot/virtualize_onelake_folder.ps1" -WorkspaceId $WorkspaceId -LakehouseName $name -FolderPath $folderPath -Content $readmeContent
+        } catch {
+          $errorMsg = $_.Exception.Message
+          Warn "Virtualization failed for $folderPath`: $errorMsg"
+        }
+      }
+      
       Log "Document folder structure created for bronze lakehouse"
       Log "Users should upload documents to: Files/documents/{category}/"
       
@@ -299,7 +316,8 @@ For more information, see the project documentation.
     }
     
   } catch {
-    Warn "Error setting up bronze lakehouse folder structure: $_"
+    $errorMsg = $_.Exception.Message
+    Warn "Error setting up bronze lakehouse folder structure: $errorMsg"
   }
 }
 

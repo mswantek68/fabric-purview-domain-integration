@@ -63,7 +63,8 @@ foreach ($candidate in $candidates) {
     $success = $true
     break
   } catch {
-    Warn ("Attempt failed for $candidate: " + $_.Exception.Message)
+    $errorMsg = $_.Exception.Message
+    Warn "Attempt failed for $candidate`: $errorMsg"
   }
 }
 

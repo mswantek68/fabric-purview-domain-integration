@@ -78,7 +78,7 @@ foreach ($f in $foldersToVirtualize) {
     & "$PSScriptRoot/virtualize_onelake_folder.ps1" -WorkspaceId $workspaceId -LakehouseName $documentLakehouseName -FolderPath $f -Content $readme
   } catch {
     $msg = $_.Exception.Message
-    Warn ("Virtualization failed for $f: " + $msg)
+    Warn "Virtualization failed for $f`: $msg"
   }
 }
 
@@ -95,13 +95,37 @@ if ($execMsiPrincipalId -and $aiSearchName -and $aiFoundryName) {
   Log "Skipping automatic RBAC: missing principal ID or AI service names"
 }
 
-# Create indexers for all categories
+# Create indexers for all categories using the working approach
 try {
-  Log "Creating document indexers (all categories)..."
-  & "$PSScriptRoot/setup_document_indexers.ps1" -Categories 'all' -ScheduleIntervalMinutes 60
-  Log "Indexers creation requested"
+  Log "Creating document indexers (all categories) with working OneLake indexer method..."
+  
+  # Use the proven working approach that handles all the edge cases
+  $documentFolders = @("Files/documents/contracts", "Files/documents/reports", "Files/documents/presentations")
+  
+  foreach ($folder in $documentFolders) {
+    $folderName = ($folder -split '/')[-1]  # Get last part (contracts, reports, etc.)
+    Log "Setting up indexer for: $folderName"
+    
+    try {
+      & "$PSScriptRoot/create_onelake_indexer.ps1" `
+        -FolderPath $folder `
+        -IndexName "files-documents-$folderName" `
+        -WorkspaceId $workspaceId `
+        -AISearchName $aiSearchName `
+        -LakehouseName $documentLakehouseName `
+        -ScheduleIntervalMinutes 60
+      
+      Log "✅ Successfully created indexer for $folderName"
+    } catch {
+      Log "⚠️ Failed to create indexer for $folderName`: $_"
+    }
+    
+    Start-Sleep -Seconds 2  # Brief pause between creations
+  }
+  
+  Log "OneLake indexing automation completed"
 } catch {
-  Warn "Indexer setup failed: $_"
+  Warn "OneLake indexer setup failed: $_"
 }
 
 Log "Post-provision OneLake indexing orchestration finished"

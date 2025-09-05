@@ -27,6 +27,9 @@ hooks:
     - run: ./scripts/create_lakehouses.ps1
       interactive: false
       shell: pwsh
+    - run: ./scripts/materialize_document_folders.ps1
+      interactive: false
+      shell: pwsh
     - run: ./scripts/postprovision_onelake_indexing.ps1
       interactive: false
       shell: pwsh

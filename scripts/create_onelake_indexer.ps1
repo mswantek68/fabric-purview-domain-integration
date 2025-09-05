@@ -2,7 +2,23 @@
 .SYNOPSIS
   Create an Azure AI Search OneLake indexer for a specific folder in the bronze lakehouse
 .DESCRIPTION
-  This script creates an AI Search data source, index, and indexer using the OneLake connector
+  This script creates an AI Search data source, index, and indexer using t# Build the OneLake data source JSON
+# For OneLake data sources, ResourceId should be just the workspace ID
+$dataSource = @{
+  name = $dataSourceName
+  type = "onelake"
+  credentials = @{
+    connectionString = "ResourceId=$script:WorkspaceId"
+  }
+  container = @{
+    name = $lakehouseId
+    query = $FolderPath
+  }
+  dataChangeDetectionPolicy = @{
+    "@odata.type" = "#Microsoft.Azure.Search.HighWaterMarkChangeDetectionPolicy"
+    highWaterMarkColumnName = "_ts"
+  }
+} | ConvertTo-Json -Depth 10ctor
   to automatically index documents in a Fabric OneLake folder. This is the recommended approach
   for indexing documents stored in Fabric OneLake.
 .PARAMETER FolderPath
@@ -71,6 +87,23 @@ if (-not $LakehouseName -or $LakehouseName -eq "bronze") {
   }
 }
 
+# Get AI Search configuration from azd outputs if not provided
+$aiSearchResourceGroup = 'AI_Related'  # Default from main.bicep
+$aiSearchSubscriptionId = '48ab3756-f962-40a8-b0cf-b33ddae744bb'  # Default from main.bicep
+
+if (Test-Path '/tmp/azd-outputs.json') {
+  try {
+    $outputs = Get-Content '/tmp/azd-outputs.json' | ConvertFrom-Json
+    if ($outputs.aiSearchResourceGroup) { $aiSearchResourceGroup = $outputs.aiSearchResourceGroup.value }
+    if ($outputs.aiSearchSubscriptionId) { $aiSearchSubscriptionId = $outputs.aiSearchSubscriptionId.value }
+    Log "Using AI Search config from azd outputs: RG=$aiSearchResourceGroup, Sub=$aiSearchSubscriptionId"
+  } catch {
+    Log "Using default AI Search config: RG=$aiSearchResourceGroup, Sub=$aiSearchSubscriptionId"
+  }
+} else {
+  Log "No azd outputs found, using default AI Search config: RG=$aiSearchResourceGroup, Sub=$aiSearchSubscriptionId"
+}
+
 if (-not $script:WorkspaceId) { Fail "WorkspaceId not provided and not found in environment" }
 if (-not $AISearchName) { Fail "AISearchName not provided and not found in azd outputs" }
 
@@ -85,12 +118,45 @@ Log "Index name: $IndexName"
 Log "AI Search service: $AISearchName"
 Log "Workspace ID: $script:WorkspaceId"
 
-# Get access token for AI Search using managed identity
+# Get access token for AI Search using managed identity, or fall back to API key
+$searchToken = $null
+$searchApiKey = $null
+
+# Force API key authentication for now (many AI Search services default to API key auth)
+# try {
+#   $searchToken = & az account get-access-token --resource https://search.azure.com --query accessToken -o tsv
+#   if (-not $searchToken) { 
+#     Log "Could not retrieve AI Search access token, trying API key authentication..."
+#     $searchToken = $null
+#   }
+# } catch {
+#   Log "Failed to get AI Search access token, trying API key authentication..."
+#   $searchToken = $null
+# }
+
+# Get API key for authentication
+Log "Attempting to get AI Search API key..."
 try {
-  $searchToken = & az account get-access-token --resource https://search.azure.com --query accessToken -o tsv
-  if (-not $searchToken) { Fail "Could not retrieve AI Search access token" }
+  if ($aiSearchResourceGroup -and $aiSearchSubscriptionId) {
+    Log "Using resource group: $aiSearchResourceGroup, subscription: $aiSearchSubscriptionId"
+    $keyInfo = & az search admin-key show --service-name $AISearchName --resource-group $aiSearchResourceGroup --subscription $aiSearchSubscriptionId --query primaryKey -o tsv 2>$null
+  } else {
+    Log "No resource group/subscription specified, using default context"
+    $keyInfo = & az search admin-key show --service-name $AISearchName --query primaryKey -o tsv 2>$null
+  }
+  
+  if ($keyInfo) {
+    $searchApiKey = $keyInfo
+    Log "Successfully retrieved AI Search API key"
+  } else {
+    Log "Failed to retrieve API key"
+  }
 } catch {
-  Fail "Failed to get AI Search access token: $_"
+  Log "Exception getting API key: $($_.Exception.Message)"
+}
+
+if (-not $searchToken -and -not $searchApiKey) {
+  Fail "Could not authenticate with AI Search using either token or API key. Ensure you have permissions or the service exists."
 }
 
 # Get current subscription and resource group
@@ -113,53 +179,96 @@ $searchEndpoint = if ($env:AI_SEARCH_CUSTOM_ENDPOINT -and $env:AI_SEARCH_CUSTOM_
 
 Log "Search endpoint: $searchEndpoint"
 
+# Get the actual lakehouse ID by querying the workspace
+Log "Looking up lakehouse ID for '$LakehouseName'..."
+try {
+  $accessToken = & az account get-access-token --resource https://analysis.windows.net/powerbi/api --query accessToken -o tsv
+  $apiRoot = 'https://api.fabric.microsoft.com/v1'
+  $lakehouses = Invoke-RestMethod -Uri "$apiRoot/workspaces/$script:WorkspaceId/lakehouses" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+  
+  $lakehouse = $lakehouses.value | Where-Object { 
+    ($_.PSObject.Properties['displayName'] -ne $null -and $_.displayName -eq $LakehouseName) -or 
+    ($_.PSObject.Properties['name'] -ne $null -and $_.name -eq $LakehouseName) 
+  }
+  
+  if ($lakehouse) {
+    $lakehouseId = $lakehouse.id
+    Log "Found lakehouse ID: $lakehouseId"
+  } else {
+    Log "Could not find lakehouse '$LakehouseName', using name as-is"
+    $lakehouseId = $LakehouseName
+  }
+} catch {
+  Log "Could not query lakehouse ID, using name as-is: $($_.Exception.Message)"
+  $lakehouseId = $LakehouseName
+}
+
 # Create OneLake data source
 $dataSourceName = "$IndexName-onelake-datasource"
 $dataSource = @{
   name = $dataSourceName
   type = "onelake"
   credentials = @{
-    connectionString = "ResourceId=/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.Fabric/workspaces/$script:WorkspaceId/lakehouses/$LakehouseName;"
+    connectionString = "ResourceId=$script:WorkspaceId"
   }
   container = @{
-    name = "Files"
+    name = $lakehouseId
     query = $FolderPath
   }
   dataChangeDetectionPolicy = @{
     "@odata.type" = "#Microsoft.Azure.Search.HighWaterMarkChangeDetectionPolicy"
-    highWaterMarkColumnName = "_ts"
+    highWaterMarkColumnName = "metadata_storage_last_modified"
   }
 } | ConvertTo-Json -Depth 10
 
+# Build headers for API calls
+$headers = @{ 'Content-Type' = 'application/json' }
+if ($searchToken) {
+  $headers['Authorization'] = "Bearer $searchToken"
+  Log "Using Bearer token authentication"
+} elseif ($searchApiKey) {
+  $headers['api-key'] = $searchApiKey
+  Log "Using API key authentication"
+} else {
+  Fail "No authentication method available"
+}
+
 Log "Creating OneLake data source '$dataSourceName'..."
+Log "Request body: $dataSource"
 
 try {
-  $response = Invoke-RestMethod -Uri "$searchEndpoint/datasources?api-version=2024-05-01-preview" `
+  Invoke-RestMethod -Uri "$searchEndpoint/datasources?api-version=2024-05-01-preview" `
     -Method Post `
-    -Headers @{
-      'Content-Type' = 'application/json'
-      'Authorization' = "Bearer $searchToken"
-    } `
-    -Body $dataSource
+    -Headers $headers `
+    -Body $dataSource | Out-Null
   
   Log "Data source created successfully"
 } catch {
+  $errorDetails = ""
+  if ($_.Exception.Response) {
+    try {
+      $errorStream = $_.Exception.Response.GetResponseStream()
+      $reader = New-Object System.IO.StreamReader($errorStream)
+      $errorDetails = $reader.ReadToEnd()
+      $reader.Close()
+    } catch {
+      $errorDetails = "Could not read error details"
+    }
+  }
+  
   if ($_.Exception.Response.StatusCode -eq 409) {
     Warn "Data source '$dataSourceName' already exists, updating..."
     try {
-      $updateResponse = Invoke-RestMethod -Uri "$searchEndpoint/datasources/$dataSourceName`?api-version=2024-05-01-preview" `
+      Invoke-RestMethod -Uri "$searchEndpoint/datasources/$dataSourceName`?api-version=2024-05-01-preview" `
         -Method Put `
-        -Headers @{
-          'Content-Type' = 'application/json'
-          'Authorization' = "Bearer $searchToken"
-        } `
-        -Body $dataSource
+        -Headers $headers `
+        -Body $dataSource | Out-Null
       Log "Data source updated successfully"
     } catch {
       Fail ("Failed to update data source: " + $_.Exception.Message)
     }
   } else {
-    Fail ("Failed to create data source: " + $_.Exception.Message)
+    Fail ("Failed to create data source: " + $_.Exception.Message + ". Details: " + $errorDetails)
   }
 }
 
@@ -223,26 +332,20 @@ $indexSchema = @{
 Log "Creating search index '$IndexName'..."
 
 try {
-  $response = Invoke-RestMethod -Uri "$searchEndpoint/indexes?api-version=2024-05-01-preview" `
+  Invoke-RestMethod -Uri "$searchEndpoint/indexes?api-version=2024-05-01-preview" `
     -Method Post `
-    -Headers @{
-      'Content-Type' = 'application/json'
-      'Authorization' = "Bearer $searchToken"
-    } `
-    -Body $indexSchema
+    -Headers $headers `
+    -Body $indexSchema | Out-Null
   
   Log "Index created successfully"
 } catch {
   if ($_.Exception.Response.StatusCode -eq 409) {
     Warn "Index '$IndexName' already exists, updating if needed..."
     try {
-      $updateResponse = Invoke-RestMethod -Uri "$searchEndpoint/indexes/$IndexName`?api-version=2024-05-01-preview" `
+      Invoke-RestMethod -Uri "$searchEndpoint/indexes/$IndexName`?api-version=2024-05-01-preview" `
         -Method Put `
-        -Headers @{
-          'Content-Type' = 'application/json'
-          'Authorization' = "Bearer $searchToken"
-        } `
-        -Body $indexSchema
+        -Headers $headers `
+        -Body $indexSchema | Out-Null
       Log "Index updated successfully"
     } catch {
       Fail ("Failed to update index: " + $_.Exception.Message)
@@ -277,13 +380,10 @@ $indexer = @{
 Log "Creating OneLake indexer '$indexerName' with $ScheduleIntervalMinutes minute schedule..."
 
 try {
-  $response = Invoke-RestMethod -Uri "$searchEndpoint/indexers?api-version=2024-05-01-preview" `
+  Invoke-RestMethod -Uri "$searchEndpoint/indexers?api-version=2024-05-01-preview" `
     -Method Post `
-    -Headers @{
-      'Content-Type' = 'application/json'
-      'Authorization' = "Bearer $searchToken"
-    } `
-    -Body $indexer
+    -Headers $headers `
+    -Body $indexer | Out-Null
   
   Log "Indexer created successfully"
   Log "Indexer will run every $ScheduleIntervalMinutes minutes"
@@ -291,13 +391,10 @@ try {
   if ($_.Exception.Response.StatusCode -eq 409) {
     Warn "Indexer '$indexerName' already exists, updating..."
     try {
-      $updateResponse = Invoke-RestMethod -Uri "$searchEndpoint/indexers/$indexerName`?api-version=2024-05-01-preview" `
+      Invoke-RestMethod -Uri "$searchEndpoint/indexers/$indexerName`?api-version=2024-05-01-preview" `
         -Method Put `
-        -Headers @{
-          'Content-Type' = 'application/json'
-          'Authorization' = "Bearer $searchToken"
-        } `
-        -Body $indexer
+        -Headers $headers `
+        -Body $indexer | Out-Null
       Log "Indexer updated successfully"
     } catch {
       Fail ("Failed to update indexer: " + $_.Exception.Message)
@@ -310,11 +407,16 @@ try {
 # Run the indexer once to start initial indexing
 Log "Starting initial indexer run..."
 try {
-  $runResponse = Invoke-RestMethod -Uri "$searchEndpoint/indexers/$indexerName/run?api-version=2024-05-01-preview" `
+  $runHeaders = @{}
+  if ($searchToken) {
+    $runHeaders['Authorization'] = "Bearer $searchToken"
+  } elseif ($searchApiKey) {
+    $runHeaders['api-key'] = $searchApiKey
+  }
+  
+  Invoke-RestMethod -Uri "$searchEndpoint/indexers/$indexerName/run?api-version=2024-05-01-preview" `
     -Method Post `
-    -Headers @{
-      'Authorization' = "Bearer $searchToken"
-    }
+    -Headers $runHeaders | Out-Null
   Log "Initial indexer run started successfully"
 } catch {
   Warn ("Could not start initial indexer run: " + $_.Exception.Message)
