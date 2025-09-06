@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "dev"
+    },
+    "projectBaseName": {
+      "value": "fabricintegration"
+    },
+    "location": {
+      "value": "eastus2"
+    },
+    "fabricCapacityId": {
+      "value": "/subscriptions/YOUR-SUBSCRIPTION-ID/resourceGroups/YOUR-RG/providers/Microsoft.Fabric/capacities/YOUR-CAPACITY-NAME"
+    },
+    "tags": {
+      "value": {
+        "Environment": "dev",
+        "Project": "FabricPurviewIntegration",
+        "CreatedBy": "Bicep",
+        "Owner": "DataTeam",
+        "CostCenter": "IT-Analytics"
+      }
+    }
+  }
+}
