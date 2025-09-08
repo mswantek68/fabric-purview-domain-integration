@@ -141,9 +141,6 @@ param fabricCapacitySKU = 'F64'  // Adjust based on your needs
 az login
 azd auth login
 
-# 🚨 ALWAYS preview first to catch issues early!
-azd provision --preview
-
 # Deploy the solution
 azd up
 ```
@@ -344,7 +341,7 @@ cat /tmp/fabric_scan_config.json
 # (Check Purview portal: Data Map → Sources → Fabric → Scans)
 ```
 
-**⚡ Best Practice**: Use `azd provision --preview` religiously! It validates your configuration, checks Bicep compilation, and shows resource changes without any risk. It would have caught the parameter issue instantly.
+**⚡ Best Practice**: Use `azd provision --preview` religiously! It validates your configuration, checks Bicep compilation, and shows resource changes without any risk.
 
 ## 🤝 Contributing
 
