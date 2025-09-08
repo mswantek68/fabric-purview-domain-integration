@@ -1,10 +1,54 @@
 param(
     [Parameter(Mandatory=$false)]
-    [string]$WorkspaceId = "66bf0752-f3f3-4ec8-b8fa-29d1f885815e",
+    [string]$WorkspaceId = "",
     
     [Parameter(Mandatory=$false)]
     [string]$LakehouseName = "bronze"
 )
+
+# Resolve workspace ID from environment or azd outputs
+if (-not $WorkspaceId) {
+    # Try /tmp/fabric_workspace.env first (from create_fabric_workspace.ps1)
+    if (Test-Path '/tmp/fabric_workspace.env') {
+        Get-Content '/tmp/fabric_workspace.env' | ForEach-Object {
+            if ($_ -match '^FABRIC_WORKSPACE_ID=(.+)$') { 
+                if (-not $WorkspaceId) { $WorkspaceId = $Matches[1] } 
+            }
+        }
+    }
+    
+    # Try AZURE_OUTPUTS_JSON
+    if (-not $WorkspaceId -and $env:AZURE_OUTPUTS_JSON) {
+        try {
+            $out = $env:AZURE_OUTPUTS_JSON | ConvertFrom-Json -ErrorAction Stop
+            if ($out.fabricWorkspaceId -and $out.fabricWorkspaceId.value) { $WorkspaceId = $out.fabricWorkspaceId.value }
+        } catch { }
+    }
+    
+    # Try .azure env file
+    if (-not $WorkspaceId) {
+        $envDir = $env:AZURE_ENV_NAME
+        if (-not $envDir -and (Test-Path '.azure')) { 
+            $dirs = Get-ChildItem -Path .azure -Name -ErrorAction SilentlyContinue
+            if ($dirs) { $envDir = $dirs[0] } 
+        }
+        if ($envDir) {
+            $envPath = Join-Path -Path '.azure' -ChildPath "$envDir/.env"
+            if (Test-Path $envPath) {
+                Get-Content $envPath | ForEach-Object {
+                    if ($_ -match '^fabricWorkspaceId=(?:"|")?(.+?)(?:"|")?$') { 
+                        if (-not $WorkspaceId) { $WorkspaceId = $Matches[1] } 
+                    }
+                }
+            }
+        }
+    }
+}
+
+if (-not $WorkspaceId) {
+    Write-Error "WorkspaceId not provided and could not be resolved from environment"
+    exit 1
+}
 
 # Get access token for OneLake (uses Storage scope)
 $storageToken = az account get-access-token --resource=https://storage.azure.com/ --query accessToken -o tsv

@@ -2,16 +2,24 @@
 # This script creates the necessary skillsets for processing OneLake documents
 
 param(
-    [string]$aiSearchName = $env:AZURE_AI_SEARCH_NAME,
-    [string]$resourceGroup = $env:AZURE_RESOURCE_GROUP_NAME,
-    [string]$subscription = $env:AZURE_SUBSCRIPTION_ID
+    [string]$aiSearchName = "",
+    [string]$resourceGroup = "",
+    [string]$subscription = ""
 )
+
+# Resolve parameters from environment
+if (-not $aiSearchName) { $aiSearchName = $env:aiSearchName }
+if (-not $aiSearchName) { $aiSearchName = $env:AZURE_AI_SEARCH_NAME }
+if (-not $resourceGroup) { $resourceGroup = $env:aiSearchResourceGroup }
+if (-not $resourceGroup) { $resourceGroup = $env:AZURE_RESOURCE_GROUP_NAME }
+if (-not $subscription) { $subscription = $env:aiSearchSubscriptionId }
+if (-not $subscription) { $subscription = $env:AZURE_SUBSCRIPTION_ID }
 
 Write-Host "Creating OneLake skillsets for AI Search service: $aiSearchName"
 Write-Host "================================================================"
 
 if (-not $aiSearchName -or -not $resourceGroup -or -not $subscription) {
-    Write-Error "Missing required environment variables. Please ensure AZURE_AI_SEARCH_NAME, AZURE_RESOURCE_GROUP_NAME, and AZURE_SUBSCRIPTION_ID are set."
+    Write-Error "Missing required parameters. aiSearchName='$aiSearchName', resourceGroup='$resourceGroup', subscription='$subscription'"
     exit 1
 }
 

@@ -244,6 +244,35 @@ if ($names -contains "bronze") {
     if ($bronzeLakehouse) {
       Log "Found bronze lakehouse: $($bronzeLakehouse.id)"
       
+      # Export all lakehouse IDs in a structured way for downstream scripts
+      try {
+        $existingLakehouses = Invoke-RestMethod -Uri "$apiRoot/workspaces/$WorkspaceId/lakehouses" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+        
+        # Build a structured export of all lakehouses
+        $lakehouseExports = @()
+        foreach ($lakehouse in $existingLakehouses.value) {
+          $name = if ($null -ne $lakehouse.PSObject.Properties['displayName']) { $lakehouse.displayName } else { $lakehouse.name }
+          $lakehouseExports += "FABRIC_LAKEHOUSE_${name}_ID=$($lakehouse.id)"
+        }
+        
+        # Also export the bronze one as the default for backward compatibility
+        $lakehouseExports += "FABRIC_LAKEHOUSE_ID=$($bronzeLakehouse.id)"
+        
+        # Write to /tmp/fabric_lakehouses.env
+        Set-Content -Path '/tmp/fabric_lakehouses.env' -Value $lakehouseExports
+        Log "Exported $($lakehouseExports.Count) lakehouse IDs to /tmp/fabric_lakehouses.env"
+        
+        # Also append to main workspace env file for convenience  
+        if (Test-Path '/tmp/fabric_workspace.env') {
+          Add-Content -Path '/tmp/fabric_workspace.env' -Value $lakehouseExports
+        } else {
+          Set-Content -Path '/tmp/fabric_workspace.env' -Value $lakehouseExports
+        }
+        
+      } catch {
+        Warn "Failed to export lakehouse IDs: $($_.Exception.Message)"
+      }
+      
       # Create a README file to establish the folder structure
       $readmeContent = @"
 # Bronze Lakehouse Document Structure

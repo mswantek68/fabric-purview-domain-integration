@@ -2,14 +2,22 @@
 # This script creates the indexer that processes OneLake documents
 
 param(
-    [string]$aiSearchName = $env:AZURE_AI_SEARCH_NAME,
-    [string]$resourceGroup = $env:AZURE_RESOURCE_GROUP_NAME,
-    [string]$subscription = $env:AZURE_SUBSCRIPTION_ID,
-    [string]$indexName = "reports-index",
+    [string]$aiSearchName = "",
+    [string]$resourceGroup = "",
+    [string]$subscription = "",
+    [string]$indexName = "onelake-documents-index",
     [string]$dataSourceName = "onelake-reports-datasource",
     [string]$skillsetName = "onelake-textonly-skillset",
     [string]$indexerName = "onelake-reports-indexer"
 )
+
+# Resolve parameters from environment
+if (-not $aiSearchName) { $aiSearchName = $env:aiSearchName }
+if (-not $aiSearchName) { $aiSearchName = $env:AZURE_AI_SEARCH_NAME }
+if (-not $resourceGroup) { $resourceGroup = $env:aiSearchResourceGroup }
+if (-not $resourceGroup) { $resourceGroup = $env:AZURE_RESOURCE_GROUP_NAME }
+if (-not $subscription) { $subscription = $env:aiSearchSubscriptionId }
+if (-not $subscription) { $subscription = $env:AZURE_SUBSCRIPTION_ID }
 
 Write-Host "Creating OneLake indexer for AI Search service: $aiSearchName"
 Write-Host "=============================================================="
@@ -49,7 +57,7 @@ $indexerBody = @{
     description = "OneLake indexer for processing documents with simplified skillset"
     dataSourceName = $dataSourceName
     targetIndexName = $indexName
-    skillsetName = 'onelake-simple-text-skillset'  # Use the working simplified skillset
+    skillsetName = 'onelake-textonly-skillset'  # Match the skillset created in 01_create_onelake_skillsets.ps1
     parameters = @{
         configuration = @{
             parsingMode = "default"

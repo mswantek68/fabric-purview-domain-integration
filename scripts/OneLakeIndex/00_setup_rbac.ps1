@@ -19,31 +19,47 @@ Log "=================================================================="
 try {
   Log "Checking for AI Search deployment outputs..."
 
-  # Check if azd outputs are available
-  if (-not (Test-Path '/tmp/azd-outputs.json')) {
+  # Get azd environment values
+  $azdEnvValues = azd env get-values 2>$null
+  if (-not $azdEnvValues) {
     Log "No azd outputs found, skipping RBAC setup"
     exit 0
   }
 
-  $outputs = Get-Content '/tmp/azd-outputs.json' | ConvertFrom-Json
+  # Parse environment variables
+  $env_vars = @{}
+  foreach ($line in $azdEnvValues) {
+    if ($line -match '^(.+?)=(.*)$') {
+      $env_vars[$matches[1]] = $matches[2].Trim('"')
+    }
+  }
 
-  # Check if AI service names are provided
-  $aiSearchName = $outputs.aiSearchName.value
-  $aiFoundryName = $outputs.aiFoundryName.value
-  
-  if (-not $aiSearchName -or -not $aiFoundryName) {
-    Log "AI service names not configured, skipping RBAC setup"
-    Log "To enable: provide aiSearchName and aiFoundryName parameters"
+  # Extract required values
+  $aiSearchName = $env_vars['aiSearchName']
+  $aiSearchResourceGroup = $env_vars['aiSearchResourceGroup'] 
+  $aiSearchSubscriptionId = $env_vars['aiSearchSubscriptionId']
+  $aiFoundryName = $env_vars['aiFoundryName']
+
+  if (-not $aiSearchName -or -not $aiSearchResourceGroup) {
+    Log "Missing AI Search details, skipping RBAC setup"
+    Log "aiSearchName: $aiSearchName"
+    Log "aiSearchResourceGroup: $aiSearchResourceGroup"
     exit 0
   }
 
-  # Check if execution managed identity principal ID is available
-  $principalId = $outputs.executionManagedIdentityPrincipalId.value
-  
-  if (-not $principalId -and -not $Force) {
-    Log "Execution managed identity principal ID not provided, skipping RBAC setup"
-    Log "To enable: provide executionManagedIdentityPrincipalId parameter or use -Force"
-    Log "You can run RBAC setup manually later"
+  # Get AI Search managed identity principal ID directly from Azure
+  Log "Getting AI Search managed identity principal ID..."
+  try {
+    $aiSearchResource = az search service show --name $aiSearchName --resource-group $aiSearchResourceGroup --subscription $aiSearchSubscriptionId --query "identity.principalId" -o tsv 2>$null
+    if (-not $aiSearchResource -or $aiSearchResource -eq "null") {
+      Log "AI Search service does not have managed identity enabled"
+      Log "Please enable system-assigned managed identity on AI Search service: $aiSearchName"
+      exit 0
+    }
+    $principalId = $aiSearchResource.Trim()
+    Log "Found AI Search managed identity: $principalId"
+  } catch {
+    Warn "Failed to get AI Search managed identity: $($_.Exception.Message)"
     exit 0
   }
 
@@ -61,7 +77,8 @@ try {
       & "$PSScriptRoot/../setup_ai_services_rbac.ps1" `
         -ExecutionManagedIdentityPrincipalId $principalId `
         -AISearchName $aiSearchName `
-        -AIFoundryName $aiFoundryName
+        -AIFoundryName $aiFoundryName `
+        -AISearchResourceGroup $aiSearchResourceGroup
       
       Log "✅ RBAC configuration completed successfully"
       Log "✅ Managed identity can now access AI Search and AI Foundry"

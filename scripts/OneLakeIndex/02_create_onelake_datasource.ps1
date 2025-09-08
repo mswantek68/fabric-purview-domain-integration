@@ -2,14 +2,44 @@
 # This script creates the OneLake data source using the correct preview API
 
 param(
-    [string]$aiSearchName = $env:AZURE_AI_SEARCH_NAME,
-    [string]$resourceGroup = $env:AZURE_RESOURCE_GROUP_NAME,
-    [string]$subscription = $env:AZURE_SUBSCRIPTION_ID,
-    [string]$workspaceId = $env:FABRIC_WORKSPACE_ID,
-    [string]$lakehouseId = $env:FABRIC_LAKEHOUSE_ID,
+    [string]$aiSearchName = "",
+    [string]$resourceGroup = "",
+    [string]$subscription = "",
+    [string]$workspaceId = "",
+    [string]$lakehouseId = "",
     [string]$dataSourceName = "onelake-reports-datasource",
     [string]$queryPath = "Files/documents/reports"
 )
+
+# Resolve parameters from environment
+if (-not $aiSearchName) { $aiSearchName = $env:aiSearchName }
+if (-not $aiSearchName) { $aiSearchName = $env:AZURE_AI_SEARCH_NAME }
+if (-not $resourceGroup) { $resourceGroup = $env:aiSearchResourceGroup }
+if (-not $resourceGroup) { $resourceGroup = $env:AZURE_RESOURCE_GROUP_NAME }
+if (-not $subscription) { $subscription = $env:aiSearchSubscriptionId }
+if (-not $subscription) { $subscription = $env:AZURE_SUBSCRIPTION_ID }
+
+# Resolve Fabric workspace and lakehouse IDs
+if (-not $workspaceId) { $workspaceId = $env:FABRIC_WORKSPACE_ID }
+if (-not $lakehouseId) { $lakehouseId = $env:FABRIC_LAKEHOUSE_ID }
+
+# Try /tmp/fabric_workspace.env (from create_fabric_workspace.ps1)
+if ((-not $workspaceId -or -not $lakehouseId) -and (Test-Path '/tmp/fabric_workspace.env')) {
+    Get-Content '/tmp/fabric_workspace.env' | ForEach-Object {
+        if ($_ -match '^FABRIC_WORKSPACE_ID=(.+)$' -and -not $workspaceId) { $workspaceId = $Matches[1] }
+        if ($_ -match '^FABRIC_LAKEHOUSE_ID=(.+)$' -and -not $lakehouseId) { $lakehouseId = $Matches[1] }
+        # Also try lakehouse-specific IDs (bronze, silver, gold)
+        if ($_ -match '^FABRIC_LAKEHOUSE_bronze_ID=(.+)$' -and -not $lakehouseId) { $lakehouseId = $Matches[1] }
+    }
+}
+
+# Try dedicated lakehouse file
+if ((-not $workspaceId -or -not $lakehouseId) -and (Test-Path '/tmp/fabric_lakehouses.env')) {
+    Get-Content '/tmp/fabric_lakehouses.env' | ForEach-Object {
+        if ($_ -match '^FABRIC_LAKEHOUSE_ID=(.+)$' -and -not $lakehouseId) { $lakehouseId = $Matches[1] }
+        if ($_ -match '^FABRIC_LAKEHOUSE_bronze_ID=(.+)$' -and -not $lakehouseId) { $lakehouseId = $Matches[1] }
+    }
+}
 
 Write-Host "Creating OneLake data source for AI Search service: $aiSearchName"
 Write-Host "================================================================="
@@ -43,12 +73,15 @@ $apiVersion = '2024-05-01-preview'
 # Create OneLake data source with System-Assigned Managed Identity
 Write-Host "Creating OneLake data source: $dataSourceName"
 
+# Create the data source using the working format (connection string and identity both null)
+Write-Host "Creating OneLake data source using working format..."
+
 $dataSourceBody = @{
     name = $dataSourceName
     description = "OneLake data source for document indexing"
     type = "onelake"
     credentials = @{
-        connectionString = "ResourceId=$workspaceId"
+        connectionString = $null
     }
     container = @{
         name = $lakehouseId
@@ -59,29 +92,6 @@ $dataSourceBody = @{
         highWaterMarkColumnName = 'metadata_storage_last_modified'
     }
 } | ConvertTo-Json -Depth 10
-
-# Delete existing data source if present
-try {
-    $deleteUrl = "https://$aiSearchName.search.windows.net/datasources/$dataSourceName?api-version=$apiVersion"
-    Invoke-RestMethod -Uri $deleteUrl -Headers $headers -Method DELETE
-    Write-Host "Deleted existing data source"
-} catch {
-    Write-Host "No existing data source to delete"
-}
-
-# Create data source
-$createUrl = "https://$aiSearchName.search.windows.net/datasources?api-version=$apiVersion"
-
-try {
-    $response = Invoke-RestMethod -Uri $createUrl -Headers $headers -Method POST -Body $dataSourceBody
-    Write-Host "✅ Successfully created OneLake data source: $($response.name)"
-    Write-Host "Data source type: $($response.type)"
-    Write-Host "Container: $($response.container.name)"
-    Write-Host "Query path: $($response.container.query)"
-} catch {
-    Write-Error "Failed to create OneLake data source: $($_.Exception.Message)"
-    exit 1
-}
 
 Write-Host ""
 Write-Host "OneLake data source created successfully!"

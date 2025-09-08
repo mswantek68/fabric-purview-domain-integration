@@ -3,31 +3,31 @@ infra:
   provider: bicep
 hooks:
   postprovision:
-    - run: ./scripts/ensure_active_capacity.ps1
+    - run: ./scripts/Fabric_Purview_Automation/ensure_active_capacity.ps1
       interactive: false
       shell: pwsh
-    - run: ./scripts/create_fabric_domain.ps1
+    - run: ./scripts/Fabric_Purview_Automation/create_fabric_domain.ps1
       interactive: false
       shell: pwsh
-    - run: ./scripts/create_fabric_workspace.ps1
+    - run: ./scripts/Fabric_Purview_Automation/create_fabric_workspace.ps1
       interactive: false
       shell: pwsh
-    - run: ./scripts/assign_workspace_to_domain.ps1
+    - run: ./scripts/Fabric_Purview_Automation/assign_workspace_to_domain.ps1
       interactive: false
       shell: pwsh
-    - run: ./scripts/create_purview_collection.ps1
+    - run: ./scripts/Fabric_Purview_Automation/create_purview_collection.ps1
       interactive: false
       shell: pwsh
-    - run: ./scripts/register_fabric_datasource.ps1
+    - run: ./scripts/Fabric_Purview_Automation/register_fabric_datasource.ps1
       interactive: false
       shell: pwsh
-    - run: ./scripts/connect_log_analytics.ps1
+    - run: ./scripts/Fabric_Purview_Automation/connect_log_analytics.ps1
       interactive: false
       shell: pwsh
-    - run: ./scripts/create_lakehouses.ps1
+    - run: ./scripts/Fabric_Purview_Automation/create_lakehouses.ps1
       interactive: false
       shell: pwsh
-    - run: ./scripts/materialize_document_folders.ps1
+    - run: ./scripts/Fabric_Purview_Automation/materialize_document_folders.ps1
       interactive: false
       shell: pwsh
     - run: ./scripts/OneLakeIndex/00_setup_rbac.ps1
@@ -42,7 +42,7 @@ hooks:
     - run: ./scripts/OneLakeIndex/03_create_onelake_indexer.ps1
       interactive: false
       shell: pwsh
-    - run: ./scripts/trigger_purview_scan_for_fabric_workspace.ps1
+    - run: ./scripts/Fabric_Purview_Automation/trigger_purview_scan_for_fabric_workspace.ps1
       interactive: false
       shell: pwsh
 metadata:
