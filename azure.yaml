@@ -36,6 +36,9 @@ hooks:
     - run: ./scripts/OneLakeIndex/01_create_onelake_skillsets.ps1
       interactive: false
       shell: pwsh
+    - run: ./scripts/OneLakeIndex/00_create_onelake_index.ps1
+      interactive: false
+      shell: pwsh
     - run: ./scripts/OneLakeIndex/02_create_onelake_datasource.ps1
       interactive: false
       shell: pwsh

@@ -54,15 +54,16 @@ Write-Host "Creating OneLake indexer: $indexerName"
 
 $indexerBody = @{
     name = $indexerName
-    description = "OneLake indexer for processing documents with simplified skillset"
+    description = "OneLake indexer for processing documents"
     dataSourceName = $dataSourceName
     targetIndexName = $indexName
-    skillsetName = 'onelake-textonly-skillset'  # Match the skillset created in 01_create_onelake_skillsets.ps1
+    skillsetName = $null  # Start without skillset to match working example
     parameters = @{
         configuration = @{
-            parsingMode = "default"
+            indexedFileNameExtensions = ".pdf,.docx"
+            excludedFileNameExtensions = ".png,.jpeg"
             dataToExtract = "contentAndMetadata"
-            indexedFileNameExtensions = ".pdf,.txt,.docx"
+            parsingMode = "default"
         }
     }
     fieldMappings = @(
@@ -75,14 +76,33 @@ $indexerBody = @{
                     useHttpServerUtilityUrlTokenEncode = $false
                 }
             }
-        }
-    )
-    outputFieldMappings = @(
+        },
         @{
-            sourceFieldName = "/document/chunks/*"
+            sourceFieldName = "content"
             targetFieldName = "content"
+        },
+        @{
+            sourceFieldName = "metadata_title"
+            targetFieldName = "title"
+        },
+        @{
+            sourceFieldName = "metadata_storage_name"
+            targetFieldName = "file_name"
+        },
+        @{
+            sourceFieldName = "metadata_storage_path"
+            targetFieldName = "file_path"
+        },
+        @{
+            sourceFieldName = "metadata_storage_last_modified"
+            targetFieldName = "last_modified"
+        },
+        @{
+            sourceFieldName = "metadata_storage_size"
+            targetFieldName = "file_size"
         }
     )
+    outputFieldMappings = @()
 } | ConvertTo-Json -Depth 10
 
 # Delete existing indexer if present
@@ -164,6 +184,40 @@ try {
     
 } catch {
     Write-Error "Failed to create OneLake indexer: $($_.Exception.Message)"
+    
+    # Use a simpler approach to get error details
+    if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
+        Write-Host "Error details: $($_.ErrorDetails.Message)"
+    } elseif ($_.Exception.Response) {
+        Write-Host "HTTP Status: $($_.Exception.Response.StatusCode)"
+        Write-Host "HTTP Reason: $($_.Exception.Response.ReasonPhrase)"
+    }
+    
+    # Try using curl to get a better error message
+    Write-Host ""
+    Write-Host "Attempting to get detailed error using curl..."
+    $curlResult = & curl -s -w "%{http_code}" -X POST $createUrl -H "api-key: $apiKey" -H "Content-Type: application/json" -d $indexerBody
+    Write-Host "Curl result: $curlResult"
+    
+    # Check if prerequisite resources exist
+    Write-Host ""
+    Write-Host "Checking prerequisite resources..."
+    try {
+        $indexUrl = "https://$aiSearchName.search.windows.net/indexes/$indexName?api-version=$apiVersion"
+        $indexExists = Invoke-RestMethod -Uri $indexUrl -Headers $headers -Method GET -ErrorAction SilentlyContinue
+        Write-Host "✅ Index '$indexName' exists"
+    } catch {
+        Write-Host "❌ Index '$indexName' does not exist or is inaccessible"
+    }
+    
+    try {
+        $datasourceUrl = "https://$aiSearchName.search.windows.net/datasources/$dataSourceName?api-version=$apiVersion"
+        $datasourceExists = Invoke-RestMethod -Uri $datasourceUrl -Headers $headers -Method GET -ErrorAction SilentlyContinue
+        Write-Host "✅ Datasource '$dataSourceName' exists"
+    } catch {
+        Write-Host "❌ Datasource '$dataSourceName' does not exist or is inaccessible"
+    }
+    
     exit 1
 }
 

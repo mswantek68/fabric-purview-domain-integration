@@ -73,28 +73,89 @@ $apiVersion = '2024-05-01-preview'
 # Create OneLake data source with System-Assigned Managed Identity
 Write-Host "Creating OneLake data source: $dataSourceName"
 
-# Create the data source using the working format (connection string and identity both null)
-Write-Host "Creating OneLake data source using working format..."
+# Create the data source using the exact working format from Azure portal
+Write-Host "Creating OneLake data source using proven working format..."
 
 $dataSourceBody = @{
     name = $dataSourceName
     description = "OneLake data source for document indexing"
     type = "onelake"
     credentials = @{
-        connectionString = $null
+        connectionString = "ResourceId=$workspaceId"
     }
     container = @{
         name = $lakehouseId
         query = $null
     }
-    dataChangeDetectionPolicy = @{
-        '@odata.type' = '#Microsoft.Azure.Search.HighWaterMarkChangeDetectionPolicy'
-        highWaterMarkColumnName = 'metadata_storage_last_modified'
-    }
+    dataChangeDetectionPolicy = $null
+    dataDeletionDetectionPolicy = $null
+    encryptionKey = $null
+    identity = $null
 } | ConvertTo-Json -Depth 10
 
-Write-Host ""
-Write-Host "OneLake data source created successfully!"
+# First, check if datasource exists and delete it if it does
+$existingDataSourceUri = "https://$aiSearchName.search.windows.net/datasources/$dataSourceName" + "?api-version=$apiVersion"
+try {
+    $existingDataSource = Invoke-RestMethod -Uri $existingDataSourceUri -Headers $headers -Method GET -ErrorAction SilentlyContinue
+    if ($existingDataSource) {
+        Write-Host "Found existing datasource. Checking for dependent indexers..."
+        
+        # Get all indexers to see if any reference this datasource
+        $indexersUri = "https://$aiSearchName.search.windows.net/indexers?api-version=$apiVersion"
+        $indexers = Invoke-RestMethod -Uri $indexersUri -Headers $headers -Method GET
+        
+        $dependentIndexers = $indexers.value | Where-Object { $_.dataSourceName -eq $dataSourceName }
+        
+        if ($dependentIndexers) {
+            Write-Host "Found dependent indexers. Deleting them first..."
+            foreach ($indexer in $dependentIndexers) {
+                $deleteIndexerUri = "https://$aiSearchName.search.windows.net/indexers/$($indexer.name)?api-version=$apiVersion"
+                try {
+                    Invoke-RestMethod -Uri $deleteIndexerUri -Headers $headers -Method DELETE
+                    Write-Host "Deleted indexer: $($indexer.name)"
+                } catch {
+                    Write-Host "Warning: Could not delete indexer $($indexer.name): $($_.Exception.Message)"
+                }
+            }
+        }
+        
+        Write-Host "Deleting existing datasource to recreate with current values..."
+        Invoke-RestMethod -Uri $existingDataSourceUri -Headers $headers -Method DELETE
+        Write-Host "Existing datasource deleted."
+    }
+} catch {
+    # Datasource doesn't exist, which is fine
+    Write-Host "No existing datasource found, creating new one..."
+}
+
+# Create the datasource
+$createDataSourceUri = "https://$aiSearchName.search.windows.net/datasources" + "?api-version=$apiVersion"
+try {
+    $response = Invoke-RestMethod -Uri $createDataSourceUri -Headers $headers -Body $dataSourceBody -Method POST
+    Write-Host ""
+    Write-Host "OneLake data source created successfully!"
+    Write-Host "Datasource Name: $($response.name)"
+    Write-Host "Lakehouse ID: $($response.container.name)"
+} catch {
+    Write-Error "Failed to create OneLake datasource: $($_.Exception.Message)"
+    
+    # Use a simpler approach to get error details
+    if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
+        Write-Host "Error details: $($_.ErrorDetails.Message)"
+    } elseif ($_.Exception.Response) {
+        Write-Host "HTTP Status: $($_.Exception.Response.StatusCode)"
+        Write-Host "HTTP Reason: $($_.Exception.Response.ReasonPhrase)"
+    }
+    
+    # Try using curl to get a better error message
+    Write-Host ""
+    Write-Host "Attempting to get detailed error using curl..."
+    $curlResult = & curl -s -w "%{http_code}" -X POST $createDataSourceUri -H "api-key: $apiKey" -H "Content-Type: application/json" -d $dataSourceBody
+    Write-Host "Curl result: $curlResult"
+    
+    exit 1
+}
+
 Write-Host ""
 Write-Host "⚠️  IMPORTANT: Ensure the AI Search System-Assigned Managed Identity has:"
 Write-Host "   1. OneLake data access role in the Fabric workspace"
