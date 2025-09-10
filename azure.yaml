@@ -48,6 +48,12 @@ hooks:
     - run: ./scripts/OneLakeIndex/03_create_onelake_indexer.ps1
       interactive: false
       shell: pwsh
+    - run: ./scripts/OneLakeIndex/05_setup_ai_foundry_search_rbac.ps1
+      interactive: false
+      shell: pwsh
+    - run: ./scripts/OneLakeIndex/06_automate_ai_foundry_connection.ps1
+      interactive: false
+      shell: pwsh
     - run: ./scripts/Fabric_Purview_Automation/trigger_purview_scan_for_fabric_workspace.ps1
       interactive: false
       shell: pwsh
