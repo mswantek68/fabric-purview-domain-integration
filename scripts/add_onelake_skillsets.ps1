@@ -13,7 +13,7 @@
 [CmdletBinding()]
 param(
   [string]$AISearchName,
-  [string]$IndexerPattern = "files-documents-*"
+  [string]$IndexerPattern = "*-documents-*"
 )
 
 Set-StrictMode -Version Latest

@@ -3,6 +3,9 @@ infra:
   provider: bicep
 hooks:
   postprovision:
+    - run: ./scripts/00_cleanup_environment.ps1
+      interactive: false
+      shell: pwsh
     - run: ./scripts/Fabric_Purview_Automation/ensure_active_capacity.ps1
       interactive: false
       shell: pwsh

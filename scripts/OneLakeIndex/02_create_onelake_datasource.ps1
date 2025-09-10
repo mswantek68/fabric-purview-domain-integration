@@ -8,8 +8,35 @@ param(
     [string]$workspaceId = "",
     [string]$lakehouseId = "",
     [string]$dataSourceName = "onelake-reports-datasource",
+    [string]$workspaceName = "",
     [string]$queryPath = "Files/documents/reports"
 )
+
+function Get-SafeName([string]$name) {
+    if (-not $name) { return $null }
+    $safe = $name.ToLower() -replace "[^a-z0-9-]", "-" -replace "-+", "-"
+    $safe = $safe.Trim('-')
+    if ([string]::IsNullOrEmpty($safe)) { return $null }
+    if ($safe.Length -gt 128) { $safe = $safe.Substring(0,128).Trim('-') }
+    return $safe
+}
+
+# Resolve workspace name if not provided
+if (-not $workspaceName) { $workspaceName = $env:FABRIC_WORKSPACE_NAME }
+if (-not $workspaceName -and (Test-Path '/tmp/fabric_workspace.env')) {
+    Get-Content '/tmp/fabric_workspace.env' | ForEach-Object {
+        if ($_ -match '^FABRIC_WORKSPACE_NAME=(.+)$') { $workspaceName = $Matches[1].Trim() }
+    }
+}
+if (-not $workspaceName -and $env:AZURE_OUTPUTS_JSON) {
+    try { $workspaceName = ($env:AZURE_OUTPUTS_JSON | ConvertFrom-Json).desiredFabricWorkspaceName.value } catch {}
+}
+
+# If dataSourceName is still the generic default, derive from workspace name
+if ($dataSourceName -eq 'onelake-reports-datasource' -and $workspaceName) {
+    $ds = Get-SafeName($workspaceName + "-onelake-datasource")
+    if ($ds) { $dataSourceName = $ds }
+}
 
 # Resolve parameters from environment
 if (-not $aiSearchName) { $aiSearchName = $env:aiSearchName }

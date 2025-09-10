@@ -107,14 +107,29 @@ try {
     Log "Setting up indexer for: $folderName"
     
     try {
-      & "$PSScriptRoot/create_onelake_indexer.ps1" `
+      # Resolve workspace name to include in index name so it's obvious which workspace/domain owns the index
+      $safeWorkspaceName = $null
+      if ($env:FABRIC_WORKSPACE_NAME) { $safeWorkspaceName = $env:FABRIC_WORKSPACE_NAME }
+      if (-not $safeWorkspaceName -and (Test-Path '/tmp/fabric_workspace.env')) {
+        Get-Content '/tmp/fabric_workspace.env' | ForEach-Object {
+          if ($_ -match '^FABRIC_WORKSPACE_NAME=(.+)$') { $safeWorkspaceName = $Matches[1].Trim() }
+        }
+      }
+      if (-not $safeWorkspaceName -and $azdOutputs -and $azdOutputs.desiredFabricWorkspaceName) { $safeWorkspaceName = $azdOutputs.desiredFabricWorkspaceName.value }
+      if (-not $safeWorkspaceName -and $workspaceId) { $safeWorkspaceName = $workspaceId }
+      # Sanitize name for Azure Search (lowercase, alnum and hyphen)
+      function Get-SafeName([string]$n) { if (-not $n) { return 'onelake' }; $s = $n.ToLower() -replace '[^a-z0-9-]','-' -replace '-+','-'; $s = $s.Trim('-'); if ($s.Length -gt 128) { $s = $s.Substring(0,128).Trim('-') }; return $s }
+      $indexNameForCall = Get-SafeName("$safeWorkspaceName-$folderName")
+      
+      & "$PSScriptRoot/OneLakeIndex/03_create_onelake_indexer.ps1" `
         -FolderPath $folder `
-        -IndexName "files-documents-$folderName" `
+        -IndexName $indexNameForCall `
         -WorkspaceId $workspaceId `
+        -WorkspaceName $safeWorkspaceName `
         -AISearchName $aiSearchName `
         -LakehouseName $documentLakehouseName `
         -ScheduleIntervalMinutes 60
-      
+       
       Log "✅ Successfully created indexer for $folderName"
     } catch {
       Log "⚠️ Failed to create indexer for $folderName`: $_"

@@ -5,8 +5,41 @@ param(
     [string]$aiSearchName = "",
     [string]$resourceGroup = "",
     [string]$subscription = "",
-    [string]$indexName = "onelake-documents-index"
+    [string]$indexName = "onelake-documents-index",
+    [string]$workspaceName = "",
+    [string]$domainName = ""
 )
+
+function Get-SafeName([string]$name) {
+    if (-not $name) { return $null }
+    # Lowercase, replace invalid chars with '-', collapse runs of '-', trim leading/trailing '-'
+    $safe = $name.ToLower() -replace "[^a-z0-9-]", "-" -replace "-+", "-"
+    $safe = $safe.Trim('-')
+    if ([string]::IsNullOrEmpty($safe)) { return $null }
+    # limit length to 128 (conservative)
+    if ($safe.Length -gt 128) { $safe = $safe.Substring(0,128).Trim('-') }
+    return $safe
+}
+
+# Resolve workspace/domain name from common sources if not passed
+if (-not $workspaceName) { $workspaceName = $env:FABRIC_WORKSPACE_NAME }
+if (-not $workspaceName -and (Test-Path '/tmp/fabric_workspace.env')) {
+    Get-Content '/tmp/fabric_workspace.env' | ForEach-Object {
+        if ($_ -match '^FABRIC_WORKSPACE_NAME=(.+)$') { $workspaceName = $Matches[1].Trim() }
+    }
+}
+if (-not $workspaceName -and $env:AZURE_OUTPUTS_JSON) {
+    try { $workspaceName = ($env:AZURE_OUTPUTS_JSON | ConvertFrom-Json).desiredFabricWorkspaceName.value } catch {}
+}
+if (-not $domainName -and $env:FABRIC_DOMAIN_NAME) { $domainName = $env:FABRIC_DOMAIN_NAME }
+
+# If indexName is still the generic default, try to derive a clearer name from workspace or domain
+if ($indexName -eq 'onelake-documents-index') {
+    $derived = $null
+    if ($workspaceName) { $derived = Get-SafeName($workspaceName + "-documents") }
+    if (-not $derived -and $domainName) { $derived = Get-SafeName($domainName + "-documents") }
+    if ($derived) { $indexName = $derived }
+}
 
 # Resolve parameters from environment
 if (-not $aiSearchName) { $aiSearchName = $env:aiSearchName }
@@ -25,6 +58,8 @@ if (-not $aiSearchName -or -not $resourceGroup -or -not $subscription) {
 }
 
 Write-Host "Index Name: $indexName"
+if ($workspaceName) { Write-Host "Derived Fabric Workspace Name: $workspaceName" }
+if ($domainName) { Write-Host "Derived Fabric Domain Name: $domainName" }
 Write-Host ""
 
 # Get API key

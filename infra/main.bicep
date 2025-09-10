@@ -25,7 +25,7 @@ RBAC Requirements for AI Search and AI Foundry Integration:
 
 // Parameters for resource group and subscription
 @description('Fabric Capacity name. Cannot have dashes or underscores!')
-param fabricCapacityName string = 'swantestcapacity04'
+param fabricCapacityName string = 'swantestcapacity06'
 @description('Fabric capacity SKU (F-series). Available SKUs: F2, F4, F8, F16, F32, F64, F128, F256, F512, F1024, F2048.')
 @allowed([
   'F2'
@@ -40,14 +40,14 @@ param fabricCapacityName string = 'swantestcapacity04'
   'F1024'
   'F2048'
 ])
-param fabricCapacitySKU string = 'F64'
+param fabricCapacitySKU string = 'F16'
 @description('Admin principal UPNs or objectIds to assign to the capacity (optional).')
 param capacityAdminMembers array = ['admin@MngEnv282784.onmicrosoft.com']
 // Optional: workspace name passed via azd env or parameters (used by post-provision script, not ARM)
 @description('Desired Fabric workspace display name (workspace is currently not deployable via ARM as of Aug 2025).')
-param fabricWorkspaceName string = 'swantest-ws04'
+param fabricWorkspaceName string = 'swantest-ws06'
 @description('Desired Fabric Data Domain name (governance domain). Used only by post-provision script; Fabric Domains not deployable via ARM yet.')
-param domainName string = 'dswantest-domain04'
+param domainName string = 'dswantest-domain06'
 @description('Name of the existing Purview account for governance integration')
 param purviewAccountName string = 'swantekpurview'
 
