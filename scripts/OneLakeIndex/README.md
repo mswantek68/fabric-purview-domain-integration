@@ -103,18 +103,7 @@ hooks:
 
 ### Common Issues
 
-1. **Indexer finds 0 items**
-   - Most common issue: Permission problems
-   - Run `04_debug_onelake_indexer.ps1` for detailed diagnostics
-   - Verify managed identity has proper Fabric and Azure permissions
 
-2. **400 Bad Request on data source creation**
-   - Usually caused by using wrong API version
-   - Ensure using `2024-05-01-preview` in all calls
-
-3. **404 Not Found on connection test**
-   - Connection test endpoint may not be available in preview API
-   - This is expected behavior - data source creation success is the indicator
 
 ### Manual Execution
 

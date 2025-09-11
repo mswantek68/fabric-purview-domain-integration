@@ -112,134 +112,6 @@ This will automatically execute:
 12. ✅ **Purview Scanning**: Execute workspace-scoped Purview scan
 13. ✅ **Monitoring Setup**: Connect Log Analytics workspace
 
-## 🆕 OneLake Indexing & AI Search Features
-
-### Intelligent Document Processing
-
-The solution now includes **AI Search with OneLake indexing** for intelligent document discovery and search:
-
-#### Key Features
-- 🔍 **Document Indexing**: Automatically indexes documents stored in Fabric lakehouse
-- 🧠 **AI-Powered Search**: Leverages Azure AI Search for intelligent document retrieval
-- 🔗 **OneLake Integration**: Direct connection to Fabric lakehouse data using preview API 2024-05-01-preview
-- 🔐 **Seamless RBAC**: Automated managed identity configuration for secure access
-- ⚡ **Real-time Processing**: Documents are indexed as they're added to the bronze lakehouse
-- 🤖 **AI Foundry Integration**: REST API automation for knowledge source connection (Chat Playground requires manual UI setup)
-
-#### How It Works
-1. **Documents**: Store documents in the bronze lakehouse within the Fabric workspace
-2. **RBAC Setup**: AI Search managed identity is automatically granted Fabric workspace access
-3. **OneLake Indexer**: Creates indexer connecting AI Search to lakehouse using OneLake API
-4. **Document Processing**: Extracts content and metadata from documents automatically
-5. **Search Index**: Creates searchable index with document content and metadata
-6. **AI Foundry Ready**: Backend integration automated for AI Foundry Chat Playground
-7. **Query Interface**: Search documents through Azure AI Search REST API, AI Foundry, or portal
-
-#### Example Usage
-```bash
-# Documents are automatically indexed from:
-# Fabric Workspace → Bronze Lakehouse → Files → Documents/
-
-# Search via REST API:
-curl -X POST "https://[search-service].search.windows.net/indexes/[index-name]/docs/search?api-version=2024-05-01-preview" \
-  -H "Content-Type: application/json" \
-  -H "api-key: [admin-key]" \
-  -d '{"search": "your search terms"}'
-
-# AI Foundry Integration:
-# - Backend API integration fully automated
-# - Chat Playground requires manual UI configuration (2-minute setup)
-# - Use text search mode (semantic search requires additional index configuration)
-```
-
-### OneLake Indexing Scripts
-
-The solution includes comprehensive OneLake indexing automation:
-
-#### Core Scripts
-- **`01_setup_ai_search_onelake_indexer.ps1`**: Complete OneLake indexer setup
-- **`02_materialize_document_test_data.ps1`**: Test document creation and validation  
-- **`03_test_onelake_indexer.ps1`**: Indexer testing and validation
-- **`04_cleanup_onelake_environment.ps1`**: Environment cleanup and reset
-- **`05_setup_ai_foundry_search_rbac.ps1`**: RBAC configuration for AI Foundry integration
-- **`06_automate_ai_foundry_connection.ps1`**: REST API automation for AI Foundry knowledge sources
-- **`07_playground_configuration_helper.ps1`**: Manual configuration guidance for Chat Playground UI
-
-#### Automation Level
-- **95% Automated**: Infrastructure, indexing, RBAC, and API integration
-- **5% Manual**: Chat Playground UI configuration (industry standard limitation)
-- **Full Integration**: REST API connections work with citations and knowledge source access
-
-### Technical Implementation
-
-#### OneLake API Integration
-- **API Version**: `2024-05-01-preview` (latest preview with OneLake support)
-- **Authentication**: Managed identity with automatic RBAC configuration
-- **Data Source**: Direct OneLake connection to Fabric workspace lakehouse
-- **Indexing Mode**: Real-time document processing with metadata extraction
-
-#### RBAC Automation
-The solution includes **enhanced RBAC scripts** that:
-- ✅ Use current Fabric API endpoints (fixed from deprecated `/users` to `/roleAssignments`)
-- ✅ Handle 409 Conflict responses (resource already exists) as success
-- ✅ Provide detailed error reporting and recovery guidance
-- ✅ Support cross-platform execution (PowerShell Core)
-
-## 📊 Automation Impact Analysis
-
-### Manual Steps Eliminated: 59-78+ Steps → Single Command
-
-This solution transforms a complex, expert-level process into a **one-command deployment**:
-
-#### 🎯 Before vs After Automation
-
-| **Component** | **Before (Manual Steps)** | **After** | **Time Savings** |
-|---------------|---------------------------|-----------|-------------------|
-| **Infrastructure** | 15+ Azure Portal steps | ✅ `azd up` | 2-3 hours → 15 min |
-| **RBAC Setup** | 8-10 permission configs | ✅ Automated | 1-2 hours → 2 min |
-| **AI Skillsets** | 5-8 REST API calls | ✅ Automated | 45 min → 2 min |
-| **Search Index** | 6-8 schema definitions | ✅ Automated | 30 min → 1 min |
-| **Data Source** | 4-6 connection setups | ✅ Automated | 30 min → 1 min |
-| **Indexer Setup** | 8-12 configuration steps | ✅ Automated | 1 hour → 2 min |
-| **AI Foundry RBAC** | 6-8 permission steps | ✅ Automated | 45 min → 1 min |
-| **AI Foundry API** | 4-6 REST API calls | ✅ Automated | 30 min → 1 min |
-| **Configuration** | Manual documentation lookup | ✅ Automated | 15 min → instant |
-
-#### 🔢 Total Impact
-- **Manual Steps Eliminated**: **59-78+ expert-level steps**
-- **Time Savings**: **6-8 hours → 20 minutes** (95-98% reduction)
-- **Complexity Reduction**: **Expert-level → Anyone can deploy**
-- **Error Reduction**: **Human errors → Consistent automation**
-
-#### 🏆 Automation Success Rate
-- **✅ Fully Automated**: 95-98% of the entire process
-- **⚠️ Manual Remaining**: 2-5% (Chat Playground UI - industry standard)
-- **🚀 Deployment**: Single command (`azd up`)
-- **🔄 Repeatability**: Consistent across environments
-
-#### 💡 Business Impact
-- **🚀 Deployment Complexity**: Expert-level → Anyone can run
-- **⚡ Time to Value**: Hours → Minutes  
-- **🔧 Maintenance**: Manual updates → Infrastructure as Code
-- **🎯 Reliability**: Human errors → Consistent automation
-- **📈 Scalability**: One-off setup → Repeatable across environments
-
-### Monitoring OneLake Indexing
-
-```bash
-# Check indexer status via Azure CLI
-az search indexer status show \
-  --service-name [search-service] \
-  --name [indexer-name] \
-  --resource-group [resource-group]
-
-# View indexed documents
-az search index show \
-  --service-name [search-service] \
-  --name [index-name] \
-  --resource-group [resource-group]
-```
-
 ## 📋 Prerequisites
 
 ### Required Tools
@@ -410,6 +282,134 @@ The solution follows a **strict execution order** to ensure proper dependency ma
 - **🆕 AI Search RBAC** must be configured before OneLake indexer creation
 - **🆕 OneLake indexer** requires active lakehouse with document content
 - Scans can only find and catalog assets from **registered data sources**
+
+## 🆕 OneLake Indexing & AI Search Features
+
+### Intelligent Document Processing
+
+The solution now includes **AI Search with OneLake indexing** for intelligent document discovery and search:
+
+#### Key Features
+- 🔍 **Document Indexing**: Automatically indexes documents stored in Fabric lakehouse
+- 🧠 **AI-Powered Search**: Leverages Azure AI Search for intelligent document retrieval
+- 🔗 **OneLake Integration**: Direct connection to Fabric lakehouse data using preview API 2024-05-01-preview
+- 🔐 **Seamless RBAC**: Automated managed identity configuration for secure access
+- ⚡ **Real-time Processing**: Documents are indexed as they're added to the bronze lakehouse
+- 🤖 **AI Foundry Integration**: REST API automation for knowledge source connection (Chat Playground requires manual UI setup)
+
+#### How It Works
+1. **Documents**: Store documents in the bronze lakehouse within the Fabric workspace
+2. **RBAC Setup**: AI Search managed identity is automatically granted Fabric workspace access
+3. **OneLake Indexer**: Creates indexer connecting AI Search to lakehouse using OneLake API
+4. **Document Processing**: Extracts content and metadata from documents automatically
+5. **Search Index**: Creates searchable index with document content and metadata
+6. **AI Foundry Ready**: Backend integration automated for AI Foundry Chat Playground
+7. **Query Interface**: Search documents through Azure AI Search REST API, AI Foundry, or portal
+
+#### Example Usage
+```bash
+# Documents are automatically indexed from:
+# Fabric Workspace → Bronze Lakehouse → Files → Documents/
+
+# Search via REST API:
+curl -X POST "https://[search-service].search.windows.net/indexes/[index-name]/docs/search?api-version=2024-05-01-preview" \
+  -H "Content-Type: application/json" \
+  -H "api-key: [admin-key]" \
+  -d '{"search": "your search terms"}'
+
+# AI Foundry Integration:
+# - Backend API integration fully automated
+# - Chat Playground requires manual UI configuration (2-minute setup)
+# - Use text search mode (semantic search requires additional index configuration)
+```
+
+### OneLake Indexing Scripts
+
+The solution includes comprehensive OneLake indexing automation:
+
+#### Core Scripts
+- **`01_setup_ai_search_onelake_indexer.ps1`**: Complete OneLake indexer setup
+- **`02_materialize_document_test_data.ps1`**: Test document creation and validation  
+- **`03_test_onelake_indexer.ps1`**: Indexer testing and validation
+- **`04_cleanup_onelake_environment.ps1`**: Environment cleanup and reset
+- **`05_setup_ai_foundry_search_rbac.ps1`**: RBAC configuration for AI Foundry integration
+- **`06_automate_ai_foundry_connection.ps1`**: REST API automation for AI Foundry knowledge sources
+- **`07_playground_configuration_helper.ps1`**: Manual configuration guidance for Chat Playground UI
+
+#### Automation Level
+- **95% Automated**: Infrastructure, indexing, RBAC, and API integration
+- **5% Manual**: Chat Playground UI configuration (industry standard limitation)
+- **Full Integration**: REST API connections work with citations and knowledge source access
+
+### Technical Implementation
+
+#### OneLake API Integration
+- **API Version**: `2024-05-01-preview` (latest preview with OneLake support)
+- **Authentication**: Managed identity with automatic RBAC configuration
+- **Data Source**: Direct OneLake connection to Fabric workspace lakehouse
+- **Indexing Mode**: Real-time document processing with metadata extraction
+
+#### RBAC Automation
+The solution includes **enhanced RBAC scripts** that:
+- ✅ Use current Fabric API endpoints (fixed from deprecated `/users` to `/roleAssignments`)
+- ✅ Handle 409 Conflict responses (resource already exists) as success
+- ✅ Provide detailed error reporting and recovery guidance
+- ✅ Support cross-platform execution (PowerShell Core)
+
+## 📊 Automation Impact Analysis
+
+### Manual Steps Eliminated: 59-78+ Steps → Single Command
+
+This solution transforms a complex, expert-level process into a **one-command deployment**:
+
+#### 🎯 Before vs After Automation
+
+| **Component** | **Before (Manual Steps)** | **After** | **Time Savings** |
+|---------------|---------------------------|-----------|-------------------|
+| **Infrastructure** | 15+ Azure Portal steps | ✅ `azd up` | 2-3 hours → 15 min |
+| **RBAC Setup** | 8-10 permission configs | ✅ Automated | 1-2 hours → 2 min |
+| **AI Skillsets** | 5-8 REST API calls | ✅ Automated | 45 min → 2 min |
+| **Search Index** | 6-8 schema definitions | ✅ Automated | 30 min → 1 min |
+| **Data Source** | 4-6 connection setups | ✅ Automated | 30 min → 1 min |
+| **Indexer Setup** | 8-12 configuration steps | ✅ Automated | 1 hour → 2 min |
+| **AI Foundry RBAC** | 6-8 permission steps | ✅ Automated | 45 min → 1 min |
+| **AI Foundry API** | 4-6 REST API calls | ✅ Automated | 30 min → 1 min |
+| **Configuration** | Manual documentation lookup | ✅ Automated | 15 min → instant |
+
+#### 🔢 Total Impact
+- **Manual Steps Eliminated**: **59-78+ expert-level steps**
+- **Time Savings**: **6-8 hours → 20 minutes** (95-98% reduction)
+- **Complexity Reduction**: **Expert-level → Anyone can deploy**
+- **Error Reduction**: **Human errors → Consistent automation**
+
+#### 🏆 Automation Success Rate
+- **✅ Fully Automated**: 95-98% of the entire process
+- **⚠️ Manual Remaining**: 2-5% (Chat Playground UI - industry standard)
+- **🚀 Deployment**: Single command (`azd up`)
+- **🔄 Repeatability**: Consistent across environments
+
+#### 💡 Business Impact
+- **🚀 Deployment Complexity**: Expert-level → Anyone can run
+- **⚡ Time to Value**: Hours → Minutes  
+- **🔧 Maintenance**: Manual updates → Infrastructure as Code
+- **🎯 Reliability**: Human errors → Consistent automation
+- **📈 Scalability**: One-off setup → Repeatable across environments
+
+### Monitoring OneLake Indexing
+
+```bash
+# Check indexer status via Azure CLI
+az search indexer status show \
+  --service-name [search-service] \
+  --name [indexer-name] \
+  --resource-group [resource-group]
+
+# View indexed documents
+az search index show \
+  --service-name [search-service] \
+  --name [index-name] \
+  --resource-group [resource-group]
+```
 
 ## 🔍 Monitoring & Troubleshooting
 
