@@ -9,7 +9,7 @@
 param()
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'  # Changed from 'Stop' to allow graceful failures
 
 function Log([string]$m){ Write-Host "[assign-domain] $m" }
 function Warn([string]$m){ Write-Warning "[assign-domain] $m" }
@@ -76,32 +76,45 @@ try {
 
 if (-not $domainId) { Fail "Domain '$FABRIC_DOMAIN_NAME' not found. Create it first." }
 
-# 2. Resolve capacity GUID 
+# 2. Resolve capacity GUID - Direct approach with immediate success when APIs work
 $capacityGuid = $null
 $capName = if ($FABRIC_CAPACITY_ID) { ($FABRIC_CAPACITY_ID -split '/')[-1] } else { $FABRIC_CAPACITY_NAME }
 Log "Deriving Fabric capacity GUID for name: $capName"
-$maxAttempts = 12
-$attempt = 0
-while (-not $capacityGuid -and $attempt -lt $maxAttempts) {
-  $attempt++
+
+# Try Fabric API first - this should work immediately for deployed capacities
+try {
+  Log "Calling Fabric API: $apiFabricRoot/capacities"
+  $caps = Invoke-RestMethod -Uri "$apiFabricRoot/capacities" -Headers @{ Authorization = "Bearer $fabricToken" } -Method Get -ErrorAction Stop
+  if ($caps.value) {
+    $match = $caps.value | Where-Object { $_.displayName -eq $capName } | Select-Object -First 1
+    if ($match) { 
+      $capacityGuid = $match.id
+      Log "SUCCESS: Found capacity via Fabric API: $capacityGuid"
+    } else {
+      $available = ($caps.value | ForEach-Object { $_.displayName }) -join ', '
+      Log "Capacity '$capName' not found. Available: $available"
+    }
+  }
+} catch {
+  Log "Fabric API failed: $($_.Exception.Message)"
+}
+
+# Only try Power BI API if Fabric API definitively failed
+if (-not $capacityGuid) {
+  Log "Trying Power BI admin API once"
   try {
     $caps = Invoke-RestMethod -Uri "$apiPbiRoot/admin/capacities" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
     if ($caps.value) {
-      $match = $caps.value | Where-Object {
-        ($_.displayName -and $_.displayName.ToLower() -eq $capName.ToLower()) -or
-        ($_.name -and $_.name.ToLower() -eq $capName.ToLower())
+      $match = $caps.value | Where-Object { 
+        ($_.displayName -eq $capName) -or ($_.name -eq $capName) 
       } | Select-Object -First 1
       if ($match) { 
         $capacityGuid = $match.id
-        break 
+        Log "SUCCESS: Found capacity via Power BI API: $capacityGuid"
       }
     }
   } catch {
-    # ignore and retry
-  }
-  if (-not $capacityGuid) {
-    Log "Capacity GUID not found yet (attempt $attempt/$maxAttempts); waiting 10s..."
-    Start-Sleep -Seconds 10
+    Log "Power BI API also failed: $($_.Exception.Message)"
   }
 }
 if ($capacityGuid) {

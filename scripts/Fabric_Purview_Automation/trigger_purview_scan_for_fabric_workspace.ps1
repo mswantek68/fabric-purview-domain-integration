@@ -137,7 +137,15 @@ try {
   if ($resp) { $reader = New-Object System.IO.StreamReader($resp.GetResponseStream()); $runBody = $reader.ReadToEnd(); $runCode = $resp.StatusCode } else { Fail "Scan run request failed: $_" }
 }
 
-if ($runCode -ne 200 -and $runCode -ne 202) { Write-Output $runBody; Fail "Scan run request failed (HTTP $runCode)" }
+if ($runCode -ne 200 -and $runCode -ne 202) { 
+  # Check if it's just an active run already existing
+  if ($runBody -match "ScanHistory_ActiveRunExist" -or $runBody -match "already.*running") {
+    Log "⚠️ A scan is already running for this datasource. This is normal - skipping new scan trigger."
+    Log "Completed scan setup successfully."
+    exit 0
+  }
+  Write-Output $runBody; Fail "Scan run request failed (HTTP $runCode)" 
+}
 
 # Try to extract run id
 try { $runJson = $runBody | ConvertFrom-Json -ErrorAction SilentlyContinue } catch { $runJson = $null }
