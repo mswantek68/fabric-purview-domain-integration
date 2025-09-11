@@ -33,8 +33,8 @@ The scripts are numbered and should be executed in the following order:
 
 ### Environment Variables
 ```bash
-FABRIC_WORKSPACE_ID='66bf0752-f3f3-4ec8-b8fa-29d1f885815e'    # Required
-FABRIC_LAKEHOUSE_ID='1f3ba253-8305-4e9e-b053-946c261c6957'    # Required
+FABRIC_WORKSPACE_ID='your-workspace-id'    # Required
+FABRIC_LAKEHOUSE_ID='your-lakehouse-id'    # Required
 AZURE_AI_SEARCH_NAME='your-ai-search-service'                 # Set by infra
 AZURE_RESOURCE_GROUP_NAME='your-resource-group'               # Set by infra
 AZURE_SUBSCRIPTION_ID='your-subscription-id'                  # Set by infra
