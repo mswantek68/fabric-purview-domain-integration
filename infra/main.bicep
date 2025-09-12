@@ -25,7 +25,7 @@ RBAC Requirements for AI Search and AI Foundry Integration:
 
 // Parameters for resource group and subscription
 @description('Fabric Capacity name. Cannot have dashes or underscores!')
-param fabricCapacityName string = 'capacity001'
+param fabricCapacityName string = 'fabriccapacity001'
 @description('Fabric capacity SKU (F-series). Available SKUs: F2, F4, F8, F16, F32, F64, F128, F256, F512, F1024, F2048.')
 @allowed([
   'F2'
@@ -40,16 +40,16 @@ param fabricCapacityName string = 'capacity001'
   'F1024'
   'F2048'
 ])
-param fabricCapacitySKU string = 'F8'
+param fabricCapacitySKU string = 'F64'
 @description('Admin principal UPNs or objectIds to assign to the capacity (optional).')
-param capacityAdminMembers array = ['']
+param capacityAdminMembers array = []
 // Optional: workspace name passed via azd env or parameters (used by post-provision script, not ARM)
 @description('Desired Fabric workspace display name (workspace is currently not deployable via ARM as of Aug 2025).')
-param fabricWorkspaceName string = 'ws001'
+param fabricWorkspaceName string = 'fabricworkspace001'
 @description('Desired Fabric Data Domain name (governance domain). Used only by post-provision script; Fabric Domains not deployable via ARM yet.')
-param domainName string = 'domain001'
+param domainName string = 'datadomain001'
 @description('Name of the existing Purview account for governance integration')
-param purviewAccountName string = ''
+param purviewAccountName string = 'purviewaccount001'
 
 // Purview Data Map domain parameters (technical collection hierarchy used by scans/RBAC)
 @description('Data Map domain (top-level collection) name used for automation. Distinct from Unified Catalog governance domain.')
@@ -73,15 +73,15 @@ param purviewGovernanceDomainParentId string = ''
 
 // Optional parameters for AI Search/Foundry integration and lakehouse configuration
 @description('Optional: AI Search service name')
-param aiSearchName string = ''
+param aiSearchName string = 'aisearch001'
 @description('Optional: AI Foundry (Cognitive Services) name')
-param aiFoundryName string = ''
+param aiFoundryName string = 'aifoundry001'
 @description('Optional: AI Search resource group')
-param aiSearchResourceGroup string = ''
+param aiSearchResourceGroup string = 'rg-ai-services'
 @description('Optional: AI Search subscription id')
 param aiSearchSubscriptionId string = ''
 @description('Optional: AI Foundry resource group')
-param aiFoundryResourceGroup string = ''
+param aiFoundryResourceGroup string = 'rg-ai-services'
 @description('Optional: AI Foundry subscription id')
 param aiFoundrySubscriptionId string = ''
 @description('Optional: Execution Managed Identity Principal ID used for RBAC configuration')
