@@ -25,7 +25,7 @@ RBAC Requirements for AI Search and AI Foundry Integration:
 
 // Parameters for resource group and subscription
 @description('Fabric Capacity name. Cannot have dashes or underscores!')
-param fabricCapacityName string = 'capacity001'
+param fabricCapacityName string = 'swancapacity005'
 @description('Fabric capacity SKU (F-series). Available SKUs: F2, F4, F8, F16, F32, F64, F128, F256, F512, F1024, F2048.')
 @allowed([
   'F2'
@@ -42,14 +42,14 @@ param fabricCapacityName string = 'capacity001'
 ])
 param fabricCapacitySKU string = 'F8'
 @description('Admin principal UPNs or objectIds to assign to the capacity (optional).')
-param capacityAdminMembers array = ['']
+param capacityAdminMembers array = ['admin@MngEnv282784.onmicrosoft.com']
 // Optional: workspace name passed via azd env or parameters (used by post-provision script, not ARM)
 @description('Desired Fabric workspace display name (workspace is currently not deployable via ARM as of Aug 2025).')
-param fabricWorkspaceName string = 'ws001'
+param fabricWorkspaceName string = 'swanws005'
 @description('Desired Fabric Data Domain name (governance domain). Used only by post-provision script; Fabric Domains not deployable via ARM yet.')
-param domainName string = 'domain001'
+param domainName string = 'swandomain005'
 @description('Name of the existing Purview account for governance integration')
-param purviewAccountName string = ''
+param purviewAccountName string = 'swantekPurview'
 
 // Purview Data Map domain parameters (technical collection hierarchy used by scans/RBAC)
 @description('Data Map domain (top-level collection) name used for automation. Distinct from Unified Catalog governance domain.')
@@ -73,19 +73,19 @@ param purviewGovernanceDomainParentId string = ''
 
 // Optional parameters for AI Search/Foundry integration and lakehouse configuration
 @description('Optional: AI Search service name')
-param aiSearchName string = ''
+param aiSearchName string = 'aisearchswan2'
 @description('Optional: AI Foundry (Cognitive Services) name')
-param aiFoundryName string = ''
+param aiFoundryName string = 'swantekFoundry1'
 @description('Optional: AI Search resource group')
-param aiSearchResourceGroup string = ''
+param aiSearchResourceGroup string = 'AI_Related'
 @description('Optional: AI Search subscription id')
-param aiSearchSubscriptionId string = ''
+param aiSearchSubscriptionId string = '48ab3756-f962-40a8-b0cf-b33ddae744bb'
 @description('Optional: AI Foundry resource group')
-param aiFoundryResourceGroup string = ''
+param aiFoundryResourceGroup string = 'AI_Related'
 @description('Optional: AI Foundry subscription id')
-param aiFoundrySubscriptionId string = ''
+param aiFoundrySubscriptionId string = '48ab3756-f962-40a8-b0cf-b33ddae744bb'
 @description('Optional: Execution Managed Identity Principal ID used for RBAC configuration')
-param executionManagedIdentityPrincipalId string = ''
+param executionManagedIdentityPrincipalId string = '0d60355b-dcae-4331-b55f-283d80aabde5'
 @description('Comma separated lakehouse names (defaults to bronze,silver,gold)')
 param lakehouseNames string = 'bronze,silver,gold'
 @description('Default document lakehouse name to use for indexers')

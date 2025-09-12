@@ -87,6 +87,8 @@ az account show
 azd auth login --check-status
 ```
 
+> **Note**: Standard `az login` is sufficient for most deployments. The scripts will automatically request specific API tokens (Power BI, Fabric) as needed during execution. If you encounter token issues, see the troubleshooting section for alternative authentication approaches.
+
 ### Deployment
 
 ```bash
@@ -137,11 +139,15 @@ This will automatically execute:
 ### Authentication Setup
 
 ```bash
-# Login to Azure CLI with required scopes
-az login --scope https://analysis.windows.net/powerbi/api/.default
+# Login to Azure CLI
+az login
 
 # Login to Azure Developer CLI
 azd auth login
+
+# Verify authentication status
+az account show
+azd auth login --check-status
 ```
 
 ### Permission Requirements
@@ -439,7 +445,7 @@ az search indexer status show --service-name [search-service] --name [indexer-na
 
 2. **Fabric API Token Issues**
    ```bash
-   # Re-authenticate with Power BI scope
+   # If standard login fails, try with specific Power BI scope
    az login --scope https://analysis.windows.net/powerbi/api/.default
    ```
 
