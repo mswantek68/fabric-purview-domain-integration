@@ -76,7 +76,7 @@ try {
     Log "🔐 Setting up RBAC permissions for OneLake indexing..."
     
     try {
-      & "$PSScriptRoot/01_setup_ai_services_rbac.ps1" `
+      & "$PSScriptRoot/setup_ai_services_rbac.ps1" `
         -ExecutionManagedIdentityPrincipalId $principalId `
         -AISearchName $aiSearchName `
         -AIFoundryName $aiFoundryName `
@@ -89,7 +89,7 @@ try {
     } catch {
       Warn "RBAC setup failed: $_"
       Log "You can run RBAC setup manually later with:"
-      Log "  ./scripts/OneLakeIndex/01_setup_ai_services_rbac.ps1 -ExecutionManagedIdentityPrincipalId '$principalId' -AISearchName '$aiSearchName' -AIFoundryName '$aiFoundryName' -FabricWorkspaceName '$fabricWorkspaceName'"
+      Log "  ./scripts/OneLakeIndex/setup_ai_services_rbac.ps1 -ExecutionManagedIdentityPrincipalId '$principalId' -AISearchName '$aiSearchName' -AIFoundryName '$aiFoundryName' -FabricWorkspaceName '$fabricWorkspaceName'"
       throw
     }
   }
