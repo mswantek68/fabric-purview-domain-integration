@@ -42,7 +42,7 @@ param fabricCapacityName string = 'fabriccapacity001'
 ])
 param fabricCapacitySKU string = 'F64'
 @description('Admin principal UPNs or objectIds to assign to the capacity (optional).')
-param capacityAdminMembers array = ['admin@contoso.com']
+param capacityAdminMembers array = []
 // Optional: workspace name passed via azd env or parameters (used by post-provision script, not ARM)
 @description('Desired Fabric workspace display name (workspace is currently not deployable via ARM as of Aug 2025).')
 param fabricWorkspaceName string = 'fabricworkspace001'
