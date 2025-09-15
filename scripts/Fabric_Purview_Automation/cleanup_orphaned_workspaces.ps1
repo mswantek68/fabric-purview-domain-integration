@@ -16,15 +16,19 @@ param(
 )
 
 Set-StrictMode -Version Latest
+
+# Import security module
+$SecurityModulePath = Join-Path $PSScriptRoot "../SecurityModule.ps1"
+. $SecurityModulePath
 $ErrorActionPreference = 'Stop'
 
 function Log([string]$m){ Write-Host "[cleanup-workspaces] $m" }
 function Warn([string]$m){ Write-Warning "[cleanup-workspaces] $m" }
-function Fail([string]$m){ Write-Error "[cleanup-workspaces] $m"; exit 1 }
+function Fail([string]$m){ Write-Error "[script] $m"; Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken"); exit 1 }
 
 # Get Power BI API token for admin operations
 try { 
-  $accessToken = & az account get-access-token --resource https://analysis.windows.net/powerbi/api --query accessToken -o tsv 
+  $accessToken = Get-SecureApiToken -Resource $SecureApiResources.PowerBI -Description "Power BI" 
 } catch { 
   Fail 'Unable to obtain Power BI API token (az login as Fabric admin required)' 
 }
@@ -38,7 +42,7 @@ Log "Fetching all workspaces from tenant..."
 
 # Get all workspaces using admin API
 try {
-  $workspacesResponse = Invoke-RestMethod -Uri "$apiRoot/admin/groups?%24top=5000" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+  $workspacesResponse = Invoke-SecureRestMethod -Uri "$apiRoot/admin/groups?%24top=5000" -Headers $powerBIHeaders -Method Get -ErrorAction Stop
   $allWorkspaces = $workspacesResponse.value
   Log "Found $($allWorkspaces.Count) total workspaces"
 } catch {
@@ -55,7 +59,7 @@ foreach ($workspace in $allWorkspaces) {
   
   try {
     # Get workspace users
-    $usersResponse = Invoke-RestMethod -Uri "$apiRoot/admin/groups/$($workspace.id)/users" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+    $usersResponse = Invoke-SecureRestMethod -Uri "$apiRoot/admin/groups/$($workspace.id)/users" -Headers $powerBIHeaders -Method Get -ErrorAction Stop
     
     # Check if there are any admin users
     $adminUsers = $usersResponse.value | Where-Object { $_.groupUserAccessRight -eq 'Admin' }
@@ -84,7 +88,9 @@ Log "Found $($orphanedWorkspaces.Count) orphaned workspaces (no admin users)"
 
 if ($orphanedWorkspaces.Count -eq 0) {
   Log "No orphaned workspaces found. All workspaces have admin users."
-  exit 0
+  # Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
+exit 0
 }
 
 # Display orphaned workspaces
@@ -103,7 +109,9 @@ $orphanedWorkspaces | ForEach-Object {
 if (-not $Delete -or $DryRun) {
   Log "DRY RUN MODE: No workspaces will be deleted."
   Log "To actually delete these workspaces, run with -Delete (without -DryRun)"
-  exit 0
+  # Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
+exit 0
 }
 
 if ($Delete) {
@@ -113,7 +121,9 @@ if ($Delete) {
   $confirmation = Read-Host "Type 'DELETE' to confirm deletion of all orphaned workspaces"
   if ($confirmation -ne 'DELETE') {
     Log "Deletion cancelled."
-    exit 0
+    # Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
+exit 0
   }
   
   $deletedCount = 0
@@ -124,7 +134,7 @@ if ($Delete) {
       Log "Deleting workspace: $($workspace.Name) ($($workspace.Id))"
       
       # Use Fabric API to delete workspace
-      $deleteResponse = Invoke-WebRequest -Uri "$fabricApiRoot/workspaces/$($workspace.Id)" -Headers @{ Authorization = "Bearer $accessToken" } -Method Delete -UseBasicParsing -ErrorAction Stop
+      $deleteResponse = Invoke-SecureWebRequest -Uri "$fabricApiRoot/workspaces/$($workspace.Id)" -Headers $powerBIHeaders -Method Delete -ErrorAction Stop
       
       if ($deleteResponse.StatusCode -eq 200 -or $deleteResponse.StatusCode -eq 204) {
         Log "Successfully deleted workspace: $($workspace.Name)"

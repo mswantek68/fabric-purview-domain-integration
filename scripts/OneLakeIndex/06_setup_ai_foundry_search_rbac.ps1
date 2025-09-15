@@ -18,6 +18,10 @@ param(
 )
 
 Set-StrictMode -Version Latest
+
+# Import security module
+$SecurityModulePath = Join-Path $PSScriptRoot "../SecurityModule.ps1"
+. $SecurityModulePath
 $ErrorActionPreference = "Stop"
 
 function Log([string]$m) { Write-Host "[ai-foundry-search-rbac] $m" -ForegroundColor Cyan }

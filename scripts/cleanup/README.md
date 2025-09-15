@@ -13,6 +13,7 @@ This folder contains a utility for cleaning up Microsoft Fabric workspaces that 
 - **Deletes** only workspaces with no capacity assignment at all
 - **Safety features**: Preview mode, confirmation prompts, exclusion lists
 - **Uses Power BI API**: Proven to work when Fabric API fails
+- **Security focused**: Tokens are handled securely and cleared from memory
 
 **Usage**:
 ```powershell
@@ -71,6 +72,17 @@ The script:
 [cleanup] ✅ Deleted: old-sandbox
 [cleanup] ✅ Cleanup completed! Removed 2 orphaned workspaces
 ```
+
+## Security Features
+
+The script implements several security best practices:
+
+1. **Secure Token Handling**: API tokens are never logged or displayed in plain text
+2. **Memory Cleanup**: Sensitive variables are securely cleared from memory after use
+3. **Error Sanitization**: Error messages are sanitized to prevent token exposure
+4. **Minimal Token Exposure**: Tokens are only used within secure header functions
+
+**Important**: Ensure you run this script in a secure environment and that your Azure CLI session is properly authenticated.
 
 ## Troubleshooting
 

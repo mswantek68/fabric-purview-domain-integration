@@ -7,6 +7,10 @@ param(
 )
 
 Set-StrictMode -Version Latest
+
+# Import security module
+$SecurityModulePath = Join-Path $PSScriptRoot "../SecurityModule.ps1"
+. $SecurityModulePath
 $ErrorActionPreference = "Stop"
 
 function Log([string]$m) { Write-Host "[onelake-rbac] $m" -ForegroundColor Cyan }
@@ -23,7 +27,9 @@ try {
   $azdEnvValues = azd env get-values 2>$null
   if (-not $azdEnvValues) {
     Log "No azd outputs found, skipping RBAC setup"
-    exit 0
+    # Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
+exit 0
   }
 
   # Parse environment variables
@@ -45,7 +51,9 @@ try {
     Log "Missing AI Search details, skipping RBAC setup"
     Log "aiSearchName: $aiSearchName"
     Log "aiSearchResourceGroup: $aiSearchResourceGroup"
-    exit 0
+    # Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
+exit 0
   }
 
   # Get AI Search managed identity principal ID directly from Azure
@@ -55,13 +63,17 @@ try {
     if (-not $aiSearchResource -or $aiSearchResource -eq "null") {
       Log "AI Search service does not have managed identity enabled"
       Log "Please enable system-assigned managed identity on AI Search service: $aiSearchName"
-      exit 0
+      # Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
+exit 0
     }
     $principalId = $aiSearchResource.Trim()
     Log "Found AI Search managed identity: $principalId"
   } catch {
     Warn "Failed to get AI Search managed identity: $($_.Exception.Message)"
-    exit 0
+    # Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
+exit 0
   }
 
   Log "✅ RBAC setup conditions met!"

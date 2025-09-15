@@ -9,9 +9,13 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Log([string]$m){ Write-Host "[fabric-datasource] $m" }
-function Warn([string]$m){ Write-Warning "[fabric-datasource] $m" }
-function Fail([string]$m){ Write-Error "[fabric-datasource] $m"; exit 1 }
+# Import security module
+$SecurityModulePath = Join-Path $PSScriptRoot "../SecurityModule.ps1"
+. $SecurityModulePath
+
+function Log([string]$m){ Write-Host "[register-datasource] $m" }
+function Warn([string]$m){ Write-Warning "[register-datasource] $m" }
+function Fail([string]$m){ Write-Error "[register-datasource] $m"; Clear-SensitiveVariables -VariableNames @('purviewToken'); exit 1 }
 
 # Resolve Purview account and collection name from azd (if present)
 $purviewAccountName = $null; $collectionName = $null
@@ -30,22 +34,21 @@ if (Test-Path '/tmp/purview_collection.env') {
 
 $endpoint = "https://$purviewAccountName.purview.azure.com"
 
-# Acquire token
-try { 
-  $purviewToken = & az account get-access-token --resource https://purview.azure.net --query accessToken -o tsv 2>$null
-  if (-not $purviewToken) {
-    $purviewToken = & az account get-access-token --resource https://purview.azure.com --query accessToken -o tsv 2>$null
-  }
-} catch { $purviewToken = $null }
-if (-not $purviewToken) { Fail 'Failed to acquire Purview access token' }
-# Acquire token
-try { 
-  $purviewToken = & az account get-access-token --resource https://purview.azure.net --query accessToken -o tsv 2>$null
-  if (-not $purviewToken) {
-    $purviewToken = & az account get-access-token --resource https://purview.azure.com --query accessToken -o tsv 2>$null
-  }
-} catch { $purviewToken = $null }
-if (-not $purviewToken) { Fail 'Failed to acquire Purview access token' }
+# Acquire token securely
+try {
+    Log "Acquiring Purview API token..."
+    try {
+        $purviewToken = Get-SecureApiToken -Resource $SecureApiResources.Purview -Description "Purview"
+    } catch {
+        Log "Trying alternate Purview endpoint..."
+        $purviewToken = Get-SecureApiToken -Resource $SecureApiResources.PurviewAlt -Description "Purview"
+    }
+} catch {
+    Fail "Failed to acquire Purview access token: $($_.Exception.Message)"
+}
+
+# Create secure headers
+$purviewHeaders = New-SecureHeaders -Token $purviewToken
 
 # Debug: print the identity running this script
 try {
@@ -55,7 +58,7 @@ if ($acctName) { Log "Running as Azure account: $acctName" }
 
 Log "Checking for existing Fabric (PowerBI) datasources..."
 try {
-  $existing = Invoke-RestMethod -Uri "$endpoint/scan/datasources?api-version=2022-07-01-preview" -Headers @{ Authorization = "Bearer $purviewToken" } -Method Get -ErrorAction Stop
+  $existing = Invoke-SecureRestMethod -Uri "$endpoint/scan/datasources?api-version=2022-07-01-preview" -Headers $purviewHeaders -Method Get -ErrorAction Stop
 } catch { $existing = @{ value = @() } }
 
 $fabricDatasourceName = $null
@@ -95,7 +98,7 @@ if ($fabricDatasourceName) {
     $datasourceName = 'Fabric'
     $payload = @{ kind = 'PowerBI'; name = $datasourceName; properties = @{ tenant = (& az account show --query tenantId -o tsv) } } | ConvertTo-Json -Depth 6
     try {
-      $resp = Invoke-WebRequest -Uri "$endpoint/scan/datasources/${datasourceName}?api-version=2022-07-01-preview" -Headers @{ Authorization = "Bearer $purviewToken"; 'Content-Type' = 'application/json' } -Method Put -Body $payload -UseBasicParsing -ErrorAction Stop
+      $resp = Invoke-SecureWebRequest -Uri "$endpoint/scan/datasources/${datasourceName}?api-version=2022-07-01-preview" -Headers (New-SecureHeaders -Token $purviewToken -AdditionalHeaders @{'Content-Type' = 'application/json'}) -Method Put -Body $payload -ErrorAction Stop
       if ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 300) {
         $fabricDatasourceName = $datasourceName
         Log "Fabric datasource '$datasourceName' registered successfully at account root (HTTP $($resp.StatusCode))"
@@ -118,7 +121,7 @@ if ($fabricDatasourceName) {
       Warn "Fabric datasource registration failed (HTTP $httpCode): $_"
       # Re-check datasources and try to pick an existing PowerBI datasource as a fallback
       try {
-        $existing = Invoke-RestMethod -Uri "$endpoint/scan/datasources?api-version=2022-07-01-preview" -Headers @{ Authorization = "Bearer $purviewToken" } -Method Get -ErrorAction Stop
+        $existing = Invoke-SecureRestMethod -Uri "$endpoint/scan/datasources?api-version=2022-07-01-preview" -Headers $purviewHeaders -Method Get -ErrorAction Stop
       } catch { $existing = @{ value = @() } }
       $anyPbi = $null
       if ($existing.value) { $anyPbi = $existing.value | Where-Object { $_.kind -eq 'PowerBI' } | Select-Object -First 1 }
@@ -149,4 +152,6 @@ $envContent += "FABRIC_DATASOURCE_NAME=$fabricDatasourceName"
 if ($collectionId) { $envContent += "FABRIC_COLLECTION_ID=$collectionId" } else { $envContent += "FABRIC_COLLECTION_ID=" }
 Set-Content -Path '/tmp/fabric_datasource.env' -Value $envContent
 
+# Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @('purviewToken')
 exit 0

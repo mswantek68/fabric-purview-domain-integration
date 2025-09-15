@@ -4,7 +4,7 @@
 .Notes
   This is a PowerShell translation of the original bash script.
   - Requires Azure CLI (az) available on PATH and logged in.
-  - Tokens are acquired via az; API calls use Invoke-RestMethod/Invoke-WebRequest.
+  - Tokens are acquired via az; API calls use Invoke-SecureRestMethod/Invoke-SecureWebRequest.
   - Provide Purview account via $env:PURVIEW_ACCOUNT_NAME or azd env.
   - Pass workspace id as first parameter or set environment variable FABRIC_WORKSPACE_ID.
 #>
@@ -16,11 +16,15 @@ param(
 )
 
 Set-StrictMode -Version Latest
+
+# Import security module
+$SecurityModulePath = Join-Path $PSScriptRoot "../SecurityModule.ps1"
+. $SecurityModulePath
 $ErrorActionPreference = 'Stop'
 
 function Log([string]$m){ Write-Host "[purview-scan] $m" }
 function Warn([string]$m){ Write-Warning "[purview-scan] $m" }
-function Fail([string]$m){ Write-Error "[purview-scan] $m"; exit 1 }
+function Fail([string]$m){ Write-Error "[script] $m"; Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken"); exit 1 }
 
 # Resolve Purview account name
 $PurviewAccountName = $env:PURVIEW_ACCOUNT_NAME
@@ -48,7 +52,7 @@ if (-not $WorkspaceId) { Fail "Fabric workspace id not provided as parameter and
 # Acquire Purview token
 Log "Acquiring Purview access token..."
 try {
-  $purviewToken = & az account get-access-token --resource https://purview.azure.net --query accessToken -o tsv 2>$null
+  $purviewToken = Get-SecureApiToken -Resource $SecureApiResources.Purview -Description "Purview" 2>$null
   if (-not $purviewToken) { $purviewToken = & az account get-access-token --resource https://purview.azure.com --query accessToken -o tsv 2>$null }
 } catch { $purviewToken = $null }
 if (-not $purviewToken) { Fail "Failed to acquire Purview access token" }
@@ -64,7 +68,9 @@ if (Test-Path '/tmp/fabric_datasource.env') {
 }
 if (-not $datasourceName -or $datasourceName -eq '') {
   Log "No Purview datasource registered (FABRIC_DATASOURCE_NAME is empty). Skipping scan creation and run."
-  exit 0
+  # Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
+exit 0
 }
 
 # Determine Purview collection ID for domain assignment
@@ -110,7 +116,7 @@ $bodyJson = $payload | ConvertTo-Json -Depth 10
 # Create or update scan
 $createUrl = "$endpoint/scan/datasources/$datasourceName/scans/${scanName}?api-version=2022-07-01-preview"
 try {
-  $resp = Invoke-WebRequest -Uri $createUrl -Method Put -Headers @{ Authorization = "Bearer $purviewToken"; 'Content-Type' = 'application/json' } -Body $bodyJson -UseBasicParsing -ErrorAction Stop
+  $resp = Invoke-SecureWebRequest -Uri $createUrl -Method Put -Headers (New-SecureHeaders -Token $purviewToken -AdditionalHeaders @{'Content-Type' = 'application/json'}) -Body $bodyJson -ErrorAction Stop
   $code = $resp.StatusCode
   $respBody = $resp.Content
 } catch [System.Net.WebException] {
@@ -129,7 +135,7 @@ if ($code -ge 200 -and $code -lt 300) { Log "Scan definition created/updated (HT
 # Trigger a run
 $runUrl = "$endpoint/scan/datasources/$datasourceName/scans/$scanName/run?api-version=2022-07-01-preview"
 try {
-  $runResp = Invoke-WebRequest -Uri $runUrl -Method Post -Headers @{ Authorization = "Bearer $purviewToken"; 'Content-Type' = 'application/json' } -Body '{}' -UseBasicParsing -ErrorAction Stop
+  $runResp = Invoke-SecureWebRequest -Uri $runUrl -Method Post -Headers (New-SecureHeaders -Token $purviewToken -AdditionalHeaders @{'Content-Type' = 'application/json'}) -Body '{}' -ErrorAction Stop
   $runBody = $runResp.Content
   $runCode = $runResp.StatusCode
 } catch [System.Net.WebException] {
@@ -142,7 +148,9 @@ if ($runCode -ne 200 -and $runCode -ne 202) {
   if ($runBody -match "ScanHistory_ActiveRunExist" -or $runBody -match "already.*running") {
     Log "⚠️ A scan is already running for this datasource. This is normal - skipping new scan trigger."
     Log "Completed scan setup successfully."
-    exit 0
+    # Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
+exit 0
   }
   Write-Output $runBody; Fail "Scan run request failed (HTTP $runCode)" 
 }
@@ -158,7 +166,9 @@ if ($runJson) {
 if (-not $runId) {
   Log "Scan run invoked but no run id returned. Monitor the run in Purview portal or inspect the response:" 
   Write-Output $runBody
-  exit 0
+  # Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
+exit 0
 }
 
 Log "Scan run started: $runId — polling status..."
@@ -167,7 +177,7 @@ while ($true) {
   Start-Sleep -Seconds 5
   $statusUrl = "$endpoint/scan/datasources/$datasourceName/scans/${scanName}/runs/${runId}?api-version=2022-07-01-preview"
   try {
-    $sjson = Invoke-RestMethod -Uri $statusUrl -Headers @{ Authorization = "Bearer $purviewToken" } -Method Get -ErrorAction Stop
+    $sjson = Invoke-SecureRestMethod -Uri $statusUrl -Headers $purviewHeaders -Method Get -ErrorAction Stop
   } catch {
     Warn "Failed to poll run status: $_"; continue
   }
@@ -185,4 +195,6 @@ while ($true) {
 }
 
 Log "Done. Run output saved to /tmp/scan_run_$runId.json"
+# Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
 exit 0

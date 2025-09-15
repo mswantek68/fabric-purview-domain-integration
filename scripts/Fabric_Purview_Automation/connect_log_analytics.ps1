@@ -12,6 +12,10 @@ param(
 )
 
 Set-StrictMode -Version Latest
+
+# Import security module
+$SecurityModulePath = Join-Path $PSScriptRoot "../SecurityModule.ps1"
+. $SecurityModulePath
 $ErrorActionPreference = 'Stop'
 
 function Log([string]$m){ Write-Host "[fabric-loganalytics] $m" }
@@ -34,18 +38,20 @@ if (-not $FabricWorkspaceName) {
 if (-not $FabricWorkspaceName) { Warn 'No FABRIC_WORKSPACE_NAME determined; skipping Log Analytics linkage.'; exit 0 }
 
 # Acquire token
-try { $accessToken = & az account get-access-token --resource https://analysis.windows.net/powerbi/api --query accessToken -o tsv } catch { $accessToken = $null }
+try { $accessToken = Get-SecureApiToken -Resource $SecureApiResources.PowerBI -Description "Power BI" } catch { $accessToken = $null }
 if (-not $accessToken) { Warn 'Cannot acquire token; skip LA linkage.'; exit 0 }
 
 $apiRoot = 'https://api.powerbi.com/v1.0/myorg'
 $workspaceId = $env:WORKSPACE_ID
 if (-not $workspaceId) {
   try {
-    $groups = Invoke-RestMethod -Uri "$apiRoot/groups?%24top=5000" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+    $groups = Invoke-SecureRestMethod -Uri "$apiRoot/groups?%24top=5000" -Headers $powerBIHeaders -Method Get -ErrorAction Stop
     $g = $groups.value | Where-Object { $_.name -eq $FabricWorkspaceName }
     if ($g) { $workspaceId = $g.id }
   } catch {
-    Warn "Unable to resolve workspace ID for '$FabricWorkspaceName'; skipping."; exit 0
+    Warn "Unable to resolve workspace ID for '$FabricWorkspaceName'; skipping."; # Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
+exit 0
   }
 }
 
@@ -55,4 +61,6 @@ if (-not $LogAnalyticsWorkspaceId) { Warn "LOG_ANALYTICS_WORKSPACE_ID not provid
 
 Log "(PLACEHOLDER) Would link Fabric workspace $FabricWorkspaceName ($workspaceId) to Log Analytics workspace $LogAnalyticsWorkspaceId"
 Log "No public API yet; skipping."
+# Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
 exit 0

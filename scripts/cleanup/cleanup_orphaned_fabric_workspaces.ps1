@@ -25,6 +25,27 @@ function Warn([string]$m) { Write-Warning "[cleanup] $m" }
 function Success([string]$m) { Write-Host "[cleanup] ✅ $m" -ForegroundColor Green }
 function Error([string]$m) { Write-Host "[cleanup] ❌ $m" -ForegroundColor Red }
 
+# Function to create authorization headers securely
+function Get-AuthHeaders([string]$token) {
+    if (-not $token -or $token.Length -lt 10) {
+        throw "Invalid or empty token provided"
+    }
+    return @{ Authorization = "Bearer $token" }
+}
+
+# Function to securely clear sensitive variables from memory
+function Clear-SensitiveVars {
+    if (Get-Variable -Name 'fabricToken' -ErrorAction SilentlyContinue) {
+        Set-Variable -Name 'fabricToken' -Value $null -Force -ErrorAction SilentlyContinue
+        Remove-Variable -Name 'fabricToken' -Force -ErrorAction SilentlyContinue
+    }
+    if (Get-Variable -Name 'powerBIToken' -ErrorAction SilentlyContinue) {
+        Set-Variable -Name 'powerBIToken' -Value $null -Force -ErrorAction SilentlyContinue
+        Remove-Variable -Name 'powerBIToken' -Force -ErrorAction SilentlyContinue
+    }
+    [System.GC]::Collect()
+}
+
 Log "=================================================================="
 Log "Fabric Workspace Cleanup - Orphaned Workspaces"
 Log "=================================================================="
@@ -52,15 +73,15 @@ Log ""
 try {
     # Get Fabric API token for workspace listing
     Log "Authenticating with Fabric API..."
-    $fabricToken = az account get-access-token --resource https://api.fabric.microsoft.com --query accessToken -o tsv
-    if (-not $fabricToken) {
+    $fabricToken = az account get-access-token --resource https://api.fabric.microsoft.com --query accessToken -o tsv 2>$null
+    if (-not $fabricToken -or $fabricToken.Length -lt 10) {
         throw "Failed to obtain Fabric API token. Please run 'az login' first."
     }
     
-    # Get Power BI API token for workspace deletion
+    # Get Power BI API token for workspace deletion  
     Log "Authenticating with Power BI API..."
-    $powerBIToken = az account get-access-token --resource https://analysis.windows.net/powerbi/api --query accessToken -o tsv
-    if (-not $powerBIToken) {
+    $powerBIToken = az account get-access-token --resource https://analysis.windows.net/powerbi/api --query accessToken -o tsv 2>$null
+    if (-not $powerBIToken -or $powerBIToken.Length -lt 10) {
         throw "Failed to obtain Power BI API token. Please run 'az login' first."
     }
     Success "API authentication successful"
@@ -68,7 +89,8 @@ try {
     # Get all workspaces
     Log "Retrieving all Fabric workspaces..."
     $workspacesUrl = "https://api.fabric.microsoft.com/v1/workspaces"
-    $workspacesResponse = Invoke-RestMethod -Uri $workspacesUrl -Headers @{ Authorization = "Bearer $fabricToken" } -Method Get
+    $fabricHeaders = Get-AuthHeaders -token $fabricToken
+    $workspacesResponse = Invoke-RestMethod -Uri $workspacesUrl -Headers $fabricHeaders -Method Get
     
     if (-not $workspacesResponse.value) {
         Log "No workspaces found"
@@ -81,11 +103,11 @@ try {
     Log "Retrieving Fabric capacities..."
     $capacitiesUrl = "https://api.fabric.microsoft.com/v1/capacities"
     try {
-        $capacitiesResponse = Invoke-RestMethod -Uri $capacitiesUrl -Headers @{ Authorization = "Bearer $fabricToken" } -Method Get
+        $capacitiesResponse = Invoke-RestMethod -Uri $capacitiesUrl -Headers $fabricHeaders -Method Get
         $activeCapacities = $capacitiesResponse.value | Where-Object { $_.state -eq 'Active' }
         Log "Found $($activeCapacities.Count) active capacities"
     } catch {
-        Warn "Could not retrieve capacities: $($_.Exception.Message)"
+        Warn "Could not retrieve capacities: API access denied or insufficient permissions"
         $activeCapacities = @()
     }
 
@@ -124,7 +146,7 @@ try {
         # Get workspace details for age check
         try {
             $workspaceDetailsUrl = "https://api.fabric.microsoft.com/v1/workspaces/$($workspace.id)"
-            $workspaceDetails = Invoke-RestMethod -Uri $workspaceDetailsUrl -Headers @{ Authorization = "Bearer $fabricToken" } -Method Get
+            $workspaceDetails = Invoke-RestMethod -Uri $workspaceDetailsUrl -Headers $fabricHeaders -Method Get
             
             # Check workspace age (if createdDate is available)
             $isOldEnough = $true
@@ -201,6 +223,9 @@ try {
     Log "DELETING ORPHANED WORKSPACES"
     Log "=================================================================="
     
+    # Create Power BI headers for deletion
+    $powerBIHeaders = Get-AuthHeaders -token $powerBIToken
+    
     $deletedCount = 0
     $failedCount = 0
     $deletedWorkspaces = @()
@@ -212,7 +237,7 @@ try {
             
             # Use Power BI API for deletion (this is what works!)
             $deleteUrl = "https://api.powerbi.com/v1.0/myorg/groups/$($workspace.Id)"
-            Invoke-RestMethod -Uri $deleteUrl -Headers @{ Authorization = "Bearer $powerBIToken" } -Method Delete
+            Invoke-RestMethod -Uri $deleteUrl -Headers $powerBIHeaders -Method Delete
             
             $deletedCount++
             $deletedWorkspaces += $workspace.Name
@@ -223,8 +248,9 @@ try {
             
         } catch {
             $failedCount++
-            $failedWorkspaces += "$($workspace.Name): $($_.Exception.Message)"
-            Write-Host "[cleanup] ❌ Failed to delete $($workspace.Name): $($_.Exception.Message)" -ForegroundColor Red
+            $errorMsg = "API request failed"
+            $failedWorkspaces += "$($workspace.Name): $errorMsg"
+            Write-Host "[cleanup] ❌ Failed to delete $($workspace.Name): $errorMsg" -ForegroundColor Red
         }
     }
 
@@ -258,8 +284,11 @@ try {
     }
 
 } catch {
-    Write-Host "[cleanup] ❌ Cleanup script failed: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "[cleanup] ❌ Cleanup script failed: Authentication or API error occurred" -ForegroundColor Red
     exit 1
+} finally {
+    # Always clean up sensitive variables from memory
+    Clear-SensitiveVars
 }
 
 Log "=================================================================="
