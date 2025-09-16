@@ -12,6 +12,9 @@ param(
     [string]$queryPath = "Files/documents/reports"
 )
 
+# Import security module
+. "$PSScriptRoot/../SecurityModule.ps1"
+
 function Get-SafeName([string]$name) {
     if (-not $name) { return $null }
     $safe = $name.ToLower() -replace "[^a-z0-9-]", "-" -replace "-+", "-"
@@ -123,13 +126,13 @@ $dataSourceBody = @{
 # First, check if datasource exists and delete it if it does
 $existingDataSourceUri = "https://$aiSearchName.search.windows.net/datasources/$dataSourceName" + "?api-version=$apiVersion"
 try {
-    $existingDataSource = Invoke-RestMethod -Uri $existingDataSourceUri -Headers $headers -Method GET -ErrorAction SilentlyContinue
+    $existingDataSource = Invoke-SecureRestMethod -Uri $existingDataSourceUri -Headers $headers -Method GET -ErrorAction SilentlyContinue
     if ($existingDataSource) {
         Write-Host "Found existing datasource. Checking for dependent indexers..."
         
         # Get all indexers to see if any reference this datasource
         $indexersUri = "https://$aiSearchName.search.windows.net/indexers?api-version=$apiVersion"
-        $indexers = Invoke-RestMethod -Uri $indexersUri -Headers $headers -Method GET
+        $indexers = Invoke-SecureRestMethod -Uri $indexersUri -Headers $headers -Method GET
         
         $dependentIndexers = $indexers.value | Where-Object { $_.dataSourceName -eq $dataSourceName }
         
@@ -138,7 +141,7 @@ try {
             foreach ($indexer in $dependentIndexers) {
                 $deleteIndexerUri = "https://$aiSearchName.search.windows.net/indexers/$($indexer.name)?api-version=$apiVersion"
                 try {
-                    Invoke-RestMethod -Uri $deleteIndexerUri -Headers $headers -Method DELETE
+                    Invoke-SecureRestMethod -Uri $deleteIndexerUri -Headers $headers -Method DELETE
                     Write-Host "Deleted indexer: $($indexer.name)"
                 } catch {
                     Write-Host "Warning: Could not delete indexer $($indexer.name): $($_.Exception.Message)"
@@ -147,7 +150,7 @@ try {
         }
         
         Write-Host "Deleting existing datasource to recreate with current values..."
-        Invoke-RestMethod -Uri $existingDataSourceUri -Headers $headers -Method DELETE
+        Invoke-SecureRestMethod -Uri $existingDataSourceUri -Headers $headers -Method DELETE
         Write-Host "Existing datasource deleted."
     }
 } catch {
@@ -158,7 +161,7 @@ try {
 # Create the datasource
 $createDataSourceUri = "https://$aiSearchName.search.windows.net/datasources" + "?api-version=$apiVersion"
 try {
-    $response = Invoke-RestMethod -Uri $createDataSourceUri -Headers $headers -Body $dataSourceBody -Method POST
+    $response = Invoke-SecureRestMethod -Uri $createDataSourceUri -Headers $headers -Body $dataSourceBody -Method POST
     Write-Host ""
     Write-Host "OneLake data source created successfully!"
     Write-Host "Datasource Name: $($response.name)"

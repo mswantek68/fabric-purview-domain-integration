@@ -9,11 +9,15 @@
 param()
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Continue'  # Changed from 'Stop' to allow graceful failures
+$ErrorActionPreference = 'Stop'
+
+# Import security module
+$SecurityModulePath = Join-Path $PSScriptRoot "../SecurityModule.ps1"
+. $SecurityModulePath
 
 function Log([string]$m){ Write-Host "[assign-domain] $m" }
 function Warn([string]$m){ Write-Warning "[assign-domain] $m" }
-function Fail([string]$m){ Write-Error "[assign-domain] $m"; exit 1 }
+function Fail([string]$m){ Write-Error "[assign-domain] $m"; Clear-SensitiveVariables -VariableNames @('accessToken', 'fabricToken'); exit 1 }
 
 # Resolve values from environment or azd
 $FABRIC_CAPACITY_ID = $env:FABRIC_CAPACITY_ID
@@ -55,19 +59,28 @@ if (-not $FABRIC_CAPACITY_ID -and -not $FABRIC_CAPACITY_NAME) { Fail 'FABRIC_CAP
 
 Log "Assigning workspace '$FABRIC_WORKSPACE_NAME' to domain '$FABRIC_DOMAIN_NAME'"
 
-# Acquire tokens
-try { $accessToken = & az account get-access-token --resource https://analysis.windows.net/powerbi/api --query accessToken -o tsv } catch { $accessToken = $null }
-try { $fabricToken = & az account get-access-token --resource https://api.fabric.microsoft.com --query accessToken -o tsv } catch { $fabricToken = $null }
-if (-not $accessToken) { Fail 'Unable to obtain Power BI API token (az login as Fabric admin).' }
-if (-not $fabricToken) { Fail 'Unable to obtain Fabric API token (az login as Fabric admin).' }
+# Acquire tokens securely
+try {
+    Log "Acquiring Power BI API token..."
+    $accessToken = Get-SecureApiToken -Resource $SecureApiResources.PowerBI -Description "Power BI"
+    
+    Log "Acquiring Fabric API token..."
+    $fabricToken = Get-SecureApiToken -Resource $SecureApiResources.Fabric -Description "Fabric"
+} catch {
+    Fail "Authentication failed: $($_.Exception.Message)"
+}
 
 $apiFabricRoot = 'https://api.fabric.microsoft.com/v1'
 $apiPbiRoot = 'https://api.powerbi.com/v1.0/myorg'
 
+# Create secure headers
+$powerBIHeaders = New-SecureHeaders -Token $accessToken
+$fabricHeaders = New-SecureHeaders -Token $fabricToken
+
 # 1. Find domain ID via Power BI admin domains
 $domainId = $null
 try {
-  $domainsResponse = Invoke-RestMethod -Uri "$apiPbiRoot/admin/domains" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+  $domainsResponse = Invoke-SecureRestMethod -Uri "$apiPbiRoot/admin/domains" -Headers $powerBIHeaders -Method Get -ErrorAction Stop
   if ($domainsResponse.domains) {
     $d = $domainsResponse.domains | Where-Object { $_.displayName -eq $FABRIC_DOMAIN_NAME }
     if ($d) { $domainId = $d.objectId }
@@ -84,7 +97,7 @@ Log "Deriving Fabric capacity GUID for name: $capName"
 # Try Fabric API first - this should work immediately for deployed capacities
 try {
   Log "Calling Fabric API: $apiFabricRoot/capacities"
-  $caps = Invoke-RestMethod -Uri "$apiFabricRoot/capacities" -Headers @{ Authorization = "Bearer $fabricToken" } -Method Get -ErrorAction Stop
+  $caps = Invoke-SecureRestMethod -Uri "$apiFabricRoot/capacities" -Headers $fabricHeaders -Method Get -ErrorAction Stop
   if ($caps.value) {
     $match = $caps.value | Where-Object { $_.displayName -eq $capName } | Select-Object -First 1
     if ($match) { 
@@ -103,7 +116,7 @@ try {
 if (-not $capacityGuid) {
   Log "Trying Power BI admin API once"
   try {
-    $caps = Invoke-RestMethod -Uri "$apiPbiRoot/admin/capacities" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+    $caps = Invoke-SecureRestMethod -Uri "$apiPbiRoot/admin/capacities" -Headers $powerBIHeaders -Method Get -ErrorAction Stop
     if ($caps.value) {
       $match = $caps.value | Where-Object { 
         ($_.displayName -eq $capName) -or ($_.name -eq $capName) 
@@ -126,7 +139,7 @@ if ($capacityGuid) {
 # 3. Find the workspace ID
 $workspaceId = $null
 try {
-  $groups = Invoke-RestMethod -Uri "$apiPbiRoot/groups?top=5000" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+  $groups = Invoke-SecureRestMethod -Uri "$apiPbiRoot/groups?top=5000" -Headers $powerBIHeaders -Method Get -ErrorAction Stop
   if ($groups.value) {
     $g = $groups.value | Where-Object { $_.name -eq $FABRIC_WORKSPACE_NAME }
     if ($g) { $workspaceId = $g.id }
@@ -143,7 +156,7 @@ Log "Found capacity GUID: $capacityGuid"
 $assignPayload = @{ capacitiesIds = @($capacityGuid) } | ConvertTo-Json -Depth 4
 $assignUrl = "$apiFabricRoot/admin/domains/$domainId/assignWorkspacesByCapacities"
 try {
-  $assignResp = Invoke-WebRequest -Uri $assignUrl -Headers @{ Authorization = "Bearer $fabricToken"; 'Content-Type' = 'application/json' } -Method Post -Body $assignPayload -UseBasicParsing -ErrorAction Stop
+  $assignResp = Invoke-SecureWebRequest -Uri $assignUrl -Headers ($fabricHeaders) -Method Post -Body $assignPayload -ErrorAction Stop
   $statusCode = [int]$assignResp.StatusCode
   if ($statusCode -eq 200 -or $statusCode -eq 202) { 
     Log "Successfully assigned workspaces on capacity '$capName' to domain '$FABRIC_DOMAIN_NAME' (HTTP $statusCode)."
@@ -174,3 +187,6 @@ try {
 }
 
 Log 'Domain assignment complete.'
+
+# Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @('accessToken', 'fabricToken')

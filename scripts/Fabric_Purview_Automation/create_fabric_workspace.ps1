@@ -13,9 +13,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Import security module
+$SecurityModulePath = Join-Path $PSScriptRoot "../SecurityModule.ps1"
+. $SecurityModulePath
+
 function Log([string]$m){ Write-Host "[fabric-workspace] $m" }
 function Warn([string]$m){ Write-Warning "[fabric-workspace] $m" }
-function Fail([string]$m){ Write-Error "[fabric-workspace] $m"; exit 1 }
+function Fail([string]$m){ Write-Error "[fabric-workspace] $m"; Clear-SensitiveVariables -VariableNames @('accessToken'); exit 1 }
 
 # Resolve from AZURE_OUTPUTS_JSON if present
 if (-not $WorkspaceName -and $env:AZURE_OUTPUTS_JSON) {
@@ -44,6 +48,17 @@ if (-not $WorkspaceName) {
   }
 }
 
+if (-not $WorkspaceName -and (Test-Path 'infra/main.bicepparam')) {
+  try {
+    $bicepparam = Get-Content 'infra/main.bicepparam' -Raw
+    $m = [regex]::Match($bicepparam, "param\s+fabricWorkspaceName\s*=\s*'(?<val>[^']+)'")
+    if ($m.Success) {
+      $val = $m.Groups['val'].Value
+      if ($val -and -not ($val -match '^<.*>$')) { $WorkspaceName = $val }
+    }
+  } catch {}
+}
+
 if (-not $WorkspaceName -and (Test-Path 'infra/main.bicep')) {
   try {
     $bicep = Get-Content 'infra/main.bicep' -Raw
@@ -57,11 +72,18 @@ if (-not $WorkspaceName -and (Test-Path 'infra/main.bicep')) {
 
 if (-not $WorkspaceName) { Fail 'FABRIC_WORKSPACE_NAME unresolved (no outputs/env/bicep).' }
 
-# Acquire tokens
-try { $accessToken = & az account get-access-token --resource https://analysis.windows.net/powerbi/api --query accessToken -o tsv } catch { $accessToken = $null }
-if (-not $accessToken) { Fail "Failed to obtain access token for Fabric API (az login with a Fabric admin)" }
+# Acquire tokens securely
+try {
+    Log "Acquiring Power BI API token..."
+    $accessToken = Get-SecureApiToken -Resource $SecureApiResources.PowerBI -Description "Power BI"
+} catch {
+    Fail "Authentication failed: $($_.Exception.Message)"
+}
 
 $apiRoot = 'https://api.powerbi.com/v1.0/myorg'
+
+# Create secure headers
+$powerBIHeaders = New-SecureHeaders -Token $accessToken
 
 # Resolve capacity GUID if capacity ARM id given
 $capacityGuid = $null
@@ -71,7 +93,7 @@ if ($CapacityId) {
   Log "Deriving Fabric capacity GUID for name: $capName"
   
   try { 
-    $caps = Invoke-RestMethod -Uri "$apiRoot/admin/capacities" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+    $caps = Invoke-SecureRestMethod -Uri "$apiRoot/admin/capacities" -Headers $powerBIHeaders -Method Get
     if ($caps.value) { 
       Log "Searching through $($caps.value.Count) capacities for: '$capName'"
       
@@ -121,7 +143,7 @@ if ($CapacityId) {
 # Check if workspace exists
 $workspaceId = $null
 try {
-  $groups = Invoke-RestMethod -Uri "$apiRoot/groups?%24top=5000" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+  $groups = Invoke-SecureRestMethod -Uri "$apiRoot/groups?%24top=5000" -Headers $powerBIHeaders -Method Get -ErrorAction Stop
   $g = $groups.value | Where-Object { $_.name -eq $WorkspaceName }
   if ($g) { $workspaceId = $g.id }
 } catch { }
@@ -131,12 +153,12 @@ if ($workspaceId) {
   if ($capacityGuid) {
     Log "Assigning workspace to capacity GUID $capacityGuid"
     try {
-      $assignResp = Invoke-WebRequest -Uri "$apiRoot/groups/$workspaceId/AssignToCapacity" -Method Post -Headers @{ Authorization = "Bearer $accessToken"; 'Content-Type' = 'application/json' } -Body (@{ capacityId = $capacityGuid } | ConvertTo-Json) -UseBasicParsing -ErrorAction Stop
+      $assignResp = Invoke-SecureWebRequest -Uri "$apiRoot/groups/$workspaceId/AssignToCapacity" -Method Post -Headers ($powerBIHeaders) -Body (@{ capacityId = $capacityGuid } | ConvertTo-Json) -ErrorAction Stop
       Log "Capacity assignment response: $($assignResp.StatusCode)"
       
       # Verify assignment worked
       Start-Sleep -Seconds 3
-      $workspace = Invoke-RestMethod -Uri "$apiRoot/groups/$workspaceId" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+      $workspace = Invoke-SecureRestMethod -Uri "$apiRoot/groups/$workspaceId" -Headers $powerBIHeaders -Method Get -ErrorAction Stop
       if ($workspace.capacityId) {
         Log "Workspace successfully assigned to capacity: $($workspace.capacityId)"
       } else {
@@ -147,7 +169,7 @@ if ($workspaceId) {
   # assign admins
   if ($AdminUPNs) {
     $admins = $AdminUPNs -split ',' | ForEach-Object { $_.Trim() }
-    try { $currentUsers = Invoke-RestMethod -Uri "$apiRoot/groups/$workspaceId/users" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop } catch { $currentUsers = $null }
+    try { $currentUsers = Invoke-SecureRestMethod -Uri "$apiRoot/groups/$workspaceId/users" -Headers $powerBIHeaders -Method Get -ErrorAction Stop } catch { $currentUsers = $null }
     foreach ($admin in $admins) {
       if ([string]::IsNullOrWhiteSpace($admin)) { continue }
       $hasAdmin = $false
@@ -155,7 +177,7 @@ if ($workspaceId) {
       if (-not $hasAdmin) {
         Log "Adding admin: $admin"
         try {
-          Invoke-WebRequest -Uri "$apiRoot/groups/$workspaceId/users" -Method Post -Headers @{ Authorization = "Bearer $accessToken"; 'Content-Type' = 'application/json' } -Body (@{ identifier = $admin; groupUserAccessRight = 'Admin'; principalType = 'User' } | ConvertTo-Json) -UseBasicParsing -ErrorAction Stop
+          Invoke-SecureWebRequest -Uri "$apiRoot/groups/$workspaceId/users" -Method Post -Headers ($powerBIHeaders) -Body (@{ identifier = $admin; groupUserAccessRight = 'Admin'; principalType = 'User' } | ConvertTo-Json) -ErrorAction Stop
         } catch { Warn "Failed to add $($admin): $($_)" }
       } else { Log "Admin already present: $admin" }
     }
@@ -169,7 +191,7 @@ if ($workspaceId) {
 Log "Creating Fabric workspace '$WorkspaceName'..."
 $createPayload = @{ name = $WorkspaceName; type = 'Workspace' } | ConvertTo-Json -Depth 4
 try {
-  $resp = Invoke-WebRequest -Uri "$apiRoot/groups?workspaceV2=true" -Method Post -Headers @{ Authorization = "Bearer $accessToken"; 'Content-Type' = 'application/json' } -Body $createPayload -UseBasicParsing -ErrorAction Stop
+  $resp = Invoke-SecureWebRequest -Uri "$apiRoot/groups?workspaceV2=true" -Method Post -Headers $powerBIHeaders -Body $createPayload -ErrorAction Stop
   $body = $resp.Content | ConvertFrom-Json -ErrorAction SilentlyContinue
   $workspaceId = $body.id
   Log "Created workspace id: $workspaceId"
@@ -179,12 +201,12 @@ try {
 if ($capacityGuid) {
   try {
     Log "Assigning workspace to capacity GUID: $capacityGuid"
-    $assignResp = Invoke-WebRequest -Uri "$apiRoot/groups/$workspaceId/AssignToCapacity" -Method Post -Headers @{ Authorization = "Bearer $accessToken"; 'Content-Type' = 'application/json' } -Body (@{ capacityId = $capacityGuid } | ConvertTo-Json) -UseBasicParsing -ErrorAction Stop
+    $assignResp = Invoke-SecureWebRequest -Uri "$apiRoot/groups/$workspaceId/AssignToCapacity" -Method Post -Headers ($powerBIHeaders) -Body (@{ capacityId = $capacityGuid } | ConvertTo-Json) -ErrorAction Stop
     Log "Capacity assignment response: $($assignResp.StatusCode)"
     
     # Verify assignment worked
     Start-Sleep -Seconds 3
-    $workspace = Invoke-RestMethod -Uri "$apiRoot/groups/$workspaceId" -Headers @{ Authorization = "Bearer $accessToken" } -Method Get -ErrorAction Stop
+    $workspace = Invoke-SecureRestMethod -Uri "$apiRoot/groups/$workspaceId" -Headers $powerBIHeaders -Method Get -ErrorAction Stop
     if ($workspace.capacityId) {
       Log "Workspace successfully assigned to capacity: $($workspace.capacityId)"
     } else {
@@ -199,7 +221,7 @@ if ($AdminUPNs) {
   foreach ($admin in $admins) {
     if ([string]::IsNullOrWhiteSpace($admin)) { continue }
     try {
-      Invoke-WebRequest -Uri "$apiRoot/groups/$workspaceId/users" -Method Post -Headers @{ Authorization = "Bearer $accessToken"; 'Content-Type' = 'application/json' } -Body (@{ identifier = $admin; groupUserAccessRight = 'Admin'; principalType = 'User' } | ConvertTo-Json) -UseBasicParsing -ErrorAction Stop
+      Invoke-SecureWebRequest -Uri "$apiRoot/groups/$workspaceId/users" -Method Post -Headers ($powerBIHeaders) -Body (@{ identifier = $admin; groupUserAccessRight = 'Admin'; principalType = 'User' } | ConvertTo-Json) -ErrorAction Stop
       Log "Added admin: $admin"
     } catch { Warn "Failed to add $($admin): $($_)" }
   }
@@ -208,4 +230,7 @@ if ($AdminUPNs) {
 # Export
 Set-Content -Path '/tmp/fabric_workspace.env' -Value "FABRIC_WORKSPACE_ID=$workspaceId`nFABRIC_WORKSPACE_NAME=$WorkspaceName"
 Log 'Fabric workspace provisioning via REST complete.'
+
+# Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @('accessToken')
 exit 0

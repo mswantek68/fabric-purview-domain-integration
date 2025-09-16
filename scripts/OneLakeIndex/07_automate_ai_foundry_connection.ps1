@@ -18,6 +18,10 @@ param(
 )
 
 Set-StrictMode -Version Latest
+
+# Import security module
+$SecurityModulePath = Join-Path $PSScriptRoot "../SecurityModule.ps1"
+. $SecurityModulePath
 $ErrorActionPreference = "Stop"
 
 function Log([string]$m) { Write-Host "[ai-foundry-automation] $m" -ForegroundColor Cyan }
@@ -151,7 +155,7 @@ $chatUrl = "$OpenAIEndpoint/openai/deployments/$OpenAIDeploymentName/chat/comple
 
 try {
     Log "Sending test chat request to: $chatUrl"
-    $response = Invoke-RestMethod -Uri $chatUrl -Method Post -Headers $headers -Body $chatRequest -ErrorAction Stop
+    $response = Invoke-SecureRestMethod -Uri $chatUrl -Method Post -Headers $headers -Body $chatRequest -ErrorAction Stop
     
     Success "Chat completion successful!"
     Log ""

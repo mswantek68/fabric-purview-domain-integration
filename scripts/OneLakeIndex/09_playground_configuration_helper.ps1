@@ -5,6 +5,10 @@
 param()
 
 Set-StrictMode -Version Latest
+
+# Import security module
+$SecurityModulePath = Join-Path $PSScriptRoot "../SecurityModule.ps1"
+. $SecurityModulePath
 $ErrorActionPreference = "Continue"
 
 function Log([string]$m) { Write-Host "[playground-helper] $m" -ForegroundColor Cyan }

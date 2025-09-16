@@ -10,6 +10,9 @@ param(
     [string]$domainName = ""
 )
 
+# Import security module
+. "$PSScriptRoot/../SecurityModule.ps1"
+
 function Get-SafeName([string]$name) {
     if (-not $name) { return $null }
     # Lowercase, replace invalid chars with '-', collapse runs of '-', trim leading/trailing '-'
@@ -185,10 +188,10 @@ $indexBody = @{
 # First, check if index exists and delete it if it does
 $existingIndexUri = "https://$aiSearchName.search.windows.net/indexes/$indexName" + "?api-version=$apiVersion"
 try {
-    $existingIndex = Invoke-RestMethod -Uri $existingIndexUri -Headers $headers -Method GET -ErrorAction SilentlyContinue
+    $existingIndex = Invoke-SecureRestMethod -Uri $existingIndexUri -Headers $headers -Method GET -ErrorAction SilentlyContinue
     if ($existingIndex) {
         Write-Host "Deleting existing index to recreate with correct schema..."
-        Invoke-RestMethod -Uri $existingIndexUri -Headers $headers -Method DELETE
+        Invoke-SecureRestMethod -Uri $existingIndexUri -Headers $headers -Method DELETE
         Write-Host "Existing index deleted."
     }
 } catch {
@@ -199,7 +202,7 @@ try {
 # Create the index
 $createIndexUri = "https://$aiSearchName.search.windows.net/indexes" + "?api-version=$apiVersion"
 try {
-    $response = Invoke-RestMethod -Uri $createIndexUri -Headers $headers -Body $indexBody -Method POST
+    $response = Invoke-SecureRestMethod -Uri $createIndexUri -Headers $headers -Body $indexBody -Method POST
     Write-Host ""
     Write-Host "OneLake index created successfully!"
     Write-Host "Index Name: $($response.name)"

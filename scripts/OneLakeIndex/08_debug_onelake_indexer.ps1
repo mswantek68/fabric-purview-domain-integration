@@ -38,7 +38,7 @@ Write-Host "=========================="
 
 try {
     $statusUrl = "https://$aiSearchName.search.windows.net/indexers/$indexerName/status?api-version=$apiVersion"
-    $status = Invoke-RestMethod -Uri $statusUrl -Headers $headers -Method GET
+    $status = Invoke-SecureRestMethod -Uri $statusUrl -Headers $headers -Method GET
     
     Write-Host "Indexer Name: $($status.name)"
     Write-Host "Status: $($status.status)"
@@ -85,7 +85,7 @@ Write-Host "======================="
 
 try {
     $dataSourceUrl = "https://$aiSearchName.search.windows.net/datasources?api-version=$apiVersion"
-    $dataSources = Invoke-RestMethod -Uri $dataSourceUrl -Headers $headers -Method GET
+    $dataSources = Invoke-SecureRestMethod -Uri $dataSourceUrl -Headers $headers -Method GET
     
     $onelakeDataSources = $dataSources.value | Where-Object { $_.type -eq "onelake" }
     
@@ -113,7 +113,7 @@ Write-Host "====================="
 
 try {
     $skillsetUrl = "https://$aiSearchName.search.windows.net/skillsets?api-version=$apiVersion"
-    $skillsets = Invoke-RestMethod -Uri $skillsetUrl -Headers $headers -Method GET
+    $skillsets = Invoke-SecureRestMethod -Uri $skillsetUrl -Headers $headers -Method GET
     
     $onelakeSkillsets = $skillsets.value | Where-Object { $_.name -like "*onelake*" }
     

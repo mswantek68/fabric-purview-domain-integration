@@ -6,6 +6,9 @@ param(
     [string]$LakehouseName = "bronze"
 )
 
+# Import security module
+. "$PSScriptRoot/../SecurityModule.ps1"
+
 # Resolve workspace ID from environment or azd outputs
 if (-not $WorkspaceId) {
     # Try /tmp/fabric_workspace.env first (from create_fabric_workspace.ps1)
@@ -51,28 +54,22 @@ if (-not $WorkspaceId) {
 }
 
 # Get access token for OneLake (uses Storage scope)
-$storageToken = az account get-access-token --resource=https://storage.azure.com/ --query accessToken -o tsv
+$storageToken = Get-SecureApiToken -Resource $SecureApiResources.Storage -Description "Storage"
 if (!$storageToken) {
     Write-Error "Failed to get storage access token"
     exit 1
 }
 
 # Get Fabric API token to resolve lakehouse ID
-$fabricToken = az account get-access-token --resource=https://api.fabric.microsoft.com/ --query accessToken -o tsv
-if (!$fabricToken) {
-    Write-Error "Failed to get Fabric API access token"
-    exit 1
-}
+$fabricToken = Get-SecureApiToken -Resource $SecureApiResources.Fabric -Description "Fabric"
 
 Write-Host "[materialize] Getting lakehouse ID for '$LakehouseName'..."
 
-$fabricHeaders = @{
-    'Authorization' = "Bearer $fabricToken"
-    'Content-Type' = 'application/json'
-}
+# Create secure headers
+$fabricHeaders = New-SecureHeaders -Token $fabricToken -AdditionalHeaders @{ 'Content-Type' = 'application/json' }
 
 try {
-    $lakehousesResponse = Invoke-RestMethod -Uri "https://api.fabric.microsoft.com/v1/workspaces/$WorkspaceId/lakehouses" -Headers $fabricHeaders -Method Get
+    $lakehousesResponse = Invoke-SecureRestMethod -Uri "https://api.fabric.microsoft.com/v1/workspaces/$WorkspaceId/lakehouses" -Headers $fabricHeaders -Method Get
     $lakehouse = $lakehousesResponse.value | Where-Object { $_.displayName -eq $LakehouseName }
     
     if (!$lakehouse) {
@@ -88,9 +85,11 @@ try {
     exit 1
 }
 
+# Create secure headers for storage access
+$storageHeaders = New-SecureHeaders -Token $storageToken
+
 # OneLake headers for ADLS Gen2 API
-$onelakeHeaders = @{
-    'Authorization' = "Bearer $storageToken"
+$onelakeHeaders = $storageHeaders + @{
     'x-ms-version' = '2023-01-03'
 }
 
@@ -115,7 +114,7 @@ foreach ($folderPath in $foldersToCreate) {
         Write-Host "[materialize] Creating folder: $folderPath"
         
         # Create directory using ADLS Gen2 API
-        Invoke-RestMethod -Uri $createFolderUri -Headers $onelakeHeaders -Method PUT | Out-Null
+        Invoke-SecureRestMethod -Uri $createFolderUri -Headers $onelakeHeaders -Method PUT | Out-Null
         
         Write-Host "[materialize] ✓ Created folder: $folderPath"
         
@@ -135,7 +134,7 @@ Write-Host "[materialize] Verifying folder structure..."
 # List the Files folder to verify creation
 try {
     $listUri = "$baseUri/Files" + "?resource=filesystem&recursive=true"
-    $listResponse = Invoke-RestMethod -Uri $listUri -Headers $onelakeHeaders -Method GET
+    $listResponse = Invoke-SecureRestMethod -Uri $listUri -Headers $onelakeHeaders -Method GET
     
     Write-Host "[materialize] Current folder structure:"
     if ($listResponse.paths) {

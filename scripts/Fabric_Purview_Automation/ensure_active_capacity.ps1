@@ -12,11 +12,15 @@ param(
 )
 
 Set-StrictMode -Version Latest
+
+# Import security module
+$SecurityModulePath = Join-Path $PSScriptRoot "../SecurityModule.ps1"
+. $SecurityModulePath
 $ErrorActionPreference = 'Stop'
 
 function Log([string]$m){ Write-Host "[fabric-capacity] $m" }
 function Warn([string]$m){ Write-Warning "[fabric-capacity] $m" }
-function Fail([string]$m){ Write-Error "[fabric-capacity] $m"; exit 1 }
+function Fail([string]$m){ Write-Error "[script] $m"; Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken"); exit 1 }
 
 # Helper: parse AZURE_OUTPUTS_JSON if provided
 function Get-OutputValue($jsonString, $path) {
@@ -125,7 +129,9 @@ Log "Current capacity state: $state"
 if ($state -eq 'Active') { Log 'Capacity already Active.'; exit 0 }
 
 if ($state -ne 'Paused' -and $state -ne 'Suspended') {
-  Warn "Capacity state '$state' not Active; not attempting resume (only valid for Paused/Suspended)."; exit 0
+  Warn "Capacity state '$state' not Active; not attempting resume (only valid for Paused/Suspended)."; # Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
+exit 0
 }
 
 Log "Attempting to resume capacity..."
@@ -143,7 +149,9 @@ try {
 if ($rc -ne 0) {
   Warn "Resume command failed (exit $rc): $resumeOut"
   Warn "Proceeding without Active capacity; downstream scripts may skip certain operations."
-  exit 0
+  # Clean up sensitive variables
+Clear-SensitiveVariables -VariableNames @("accessToken", "fabricToken", "purviewToken", "powerBIToken", "storageToken")
+exit 0
 }
 
 Log "Resume command issued; polling for Active state (timeout ${ResumeTimeoutSeconds}s, interval ${PollIntervalSeconds}s)."

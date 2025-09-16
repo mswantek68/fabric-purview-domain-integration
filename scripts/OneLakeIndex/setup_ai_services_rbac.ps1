@@ -16,6 +16,10 @@ param(
 )
 
 Set-StrictMode -Version Latest
+
+# Import security module
+$SecurityModulePath = Join-Path $PSScriptRoot "../SecurityModule.ps1"
+. $SecurityModulePath
 $ErrorActionPreference = "Stop"
 
 function Log([string]$m) { Write-Host "[ai-services-rbac] $m" -ForegroundColor Cyan }
@@ -125,9 +129,12 @@ try {
             } else {
                 Log "Got Fabric API token successfully"
                 
+                # Create Fabric headers
+                $fabricHeaders = New-SecureHeaders -Token $fabricToken
+                
                 # Find the workspace
                 $workspacesUrl = "https://api.fabric.microsoft.com/v1/workspaces"
-                $workspacesResponse = Invoke-RestMethod -Uri $workspacesUrl -Headers @{ Authorization = "Bearer $fabricToken" } -Method Get
+                $workspacesResponse = Invoke-SecureRestMethod -Uri $workspacesUrl -Headers $fabricHeaders -Method Get
                 
                 # Debug: Log available workspaces and their properties
                 Log "Available workspaces:"
@@ -154,7 +161,7 @@ try {
                     
                     Log "Assigning Contributor role to managed identity in workspace..."
                     try {
-                        Invoke-RestMethod -Uri $roleAssignmentUrl -Headers @{ 
+                        Invoke-SecureRestMethod -Uri $roleAssignmentUrl -Headers @{ 
                             Authorization = "Bearer $fabricToken"
                             'Content-Type' = 'application/json'
                         } -Method Post -Body $rolePayload | Out-Null
