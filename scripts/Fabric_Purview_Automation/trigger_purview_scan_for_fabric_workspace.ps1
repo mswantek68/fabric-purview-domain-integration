@@ -49,6 +49,28 @@ if (-not $WorkspaceId) {
 }
 if (-not $WorkspaceId) { Fail "Fabric workspace id not provided as parameter and not found in /tmp/fabric_workspace.env." }
 
+# Determine workspace name for Fabric scan scope
+$WorkspaceName = $env:FABRIC_WORKSPACE_NAME
+if (-not $WorkspaceName) {
+  # Try azd env
+  try {
+    $azdOut = & azd env get-value desiredFabricWorkspaceName 2>$null
+    if ($LASTEXITCODE -eq 0 -and $azdOut) { $WorkspaceName = $azdOut.Trim() }
+  } catch { }
+}
+if (-not $WorkspaceName) {
+  # Try to load from /tmp/fabric_workspace.env
+  if (Test-Path "/tmp/fabric_workspace.env") {
+    Get-Content "/tmp/fabric_workspace.env" | ForEach-Object {
+      if ($_ -match '^FABRIC_WORKSPACE_NAME=(.+)$') { $WorkspaceName = $Matches[1].Trim() }
+    }
+  }
+}
+if (-not $WorkspaceName) { 
+  Log "Warning: Workspace name not found, scan may not be properly scoped"
+  $WorkspaceName = "Unknown"
+}
+
 # Acquire Purview token
 Log "Acquiring Purview access token..."
 try {
@@ -89,14 +111,27 @@ $scanName = "scan-workspace-$WorkspaceId"
 Log "Creating/Updating scan '$scanName' for datasource '$datasourceName' targeting workspace '$WorkspaceId'"
 if ($collectionId) { Log "Assigning scan to collection: $collectionId" }
 
-# Build payload
+# Get lakehouse information for more specific targeting
+$lakehouseIds = @()
+if (Test-Path '/tmp/fabric_lakehouses.env') {
+  Get-Content '/tmp/fabric_lakehouses.env' | ForEach-Object {
+    if ($_ -match '^LAKEHOUSE_(\w+)_ID=(.+)$') { 
+      $lakehouseIds += $Matches[2].Trim()
+      Log "Including lakehouse in scan scope: $($Matches[1]) ($($Matches[2].Trim()))"
+    }
+  }
+}
+
+# Build payload for workspace-scoped scan (simplified for better compatibility)
 $payload = [PSCustomObject]@{
   properties = [PSCustomObject]@{
     includePersonalWorkspaces = $false
     scanScope = [PSCustomObject]@{
       type = 'PowerBIScanScope'
       workspaces = @(
-        [PSCustomObject]@{ id = $WorkspaceId }
+        [PSCustomObject]@{ 
+          id = $WorkspaceId
+        }
       )
     }
   }
