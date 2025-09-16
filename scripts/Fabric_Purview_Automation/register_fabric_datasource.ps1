@@ -61,19 +61,29 @@ try {
   $existing = Invoke-SecureRestMethod -Uri "$endpoint/scan/datasources?api-version=2022-07-01-preview" -Headers $purviewHeaders -Method Get -ErrorAction Stop
 } catch { $existing = @{ value = @() } }
 
+# Look for workspace-specific datasource first
+$workspaceSpecificDatasourceName = "Fabric-Workspace-$WorkspaceId"
 $fabricDatasourceName = $null
-# Prefer root-level powerbi datasource (no collection or in root collection)
+
+# Check if we already have a workspace-specific datasource
 if ($existing.value) {
-  foreach ($ds in $existing.value) {
-    if ($ds.kind -eq 'PowerBI') {
-      # Accept datasources with no collection OR in the account root collection
-      $isRootLevel = (-not $ds.properties.collection) -or 
-                     ($ds.properties.collection -eq $null) -or 
-                     ($ds.properties.collection.referenceName -eq $purviewAccountName)
-      if ($isRootLevel) { 
-        $fabricDatasourceName = $ds.name
-        Log "Found existing Fabric datasource at root level: $fabricDatasourceName"
-        break 
+  $workspaceSpecific = $existing.value | Where-Object { $_.name -eq $workspaceSpecificDatasourceName }
+  if ($workspaceSpecific) {
+    $fabricDatasourceName = $workspaceSpecificDatasourceName
+    Log "Found existing workspace-specific Fabric datasource: $fabricDatasourceName"
+  } else {
+    # Look for any PowerBI datasource as fallback
+    foreach ($ds in $existing.value) {
+      if ($ds.kind -eq 'PowerBI') {
+        # Accept datasources with no collection OR in the account root collection
+        $isRootLevel = (-not $ds.properties.collection) -or 
+                       ($null -eq $ds.properties.collection) -or 
+                       ($ds.properties.collection.referenceName -eq $purviewAccountName)
+        if ($isRootLevel) { 
+          $fabricDatasourceName = $ds.name
+          Log "Found existing Fabric datasource at root level: $fabricDatasourceName"
+          break 
+        }
       }
     }
   }
@@ -92,55 +102,79 @@ if ($fabricDatasourceName) {
     $fabricDatasourceName = $anyPbi.name
     $collectionRef = $anyPbi.properties.collection.referenceName
     if ($collectionRef) { $collectionId = $collectionRef }
-  } else {
-    # No PowerBI datasource exists; create root-level one
-    Log "No existing PowerBI datasource found — registering Fabric at account root"
-    $datasourceName = 'Fabric'
-    $payload = @{ kind = 'PowerBI'; name = $datasourceName; properties = @{ tenant = (& az account show --query tenantId -o tsv) } } | ConvertTo-Json -Depth 6
-    try {
-      $resp = Invoke-SecureWebRequest -Uri "$endpoint/scan/datasources/${datasourceName}?api-version=2022-07-01-preview" -Headers (New-SecureHeaders -Token $purviewToken -AdditionalHeaders @{'Content-Type' = 'application/json'}) -Method Put -Body $payload -ErrorAction Stop
-      if ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 300) {
-        $fabricDatasourceName = $datasourceName
-        Log "Fabric datasource '$datasourceName' registered successfully at account root (HTTP $($resp.StatusCode))"
-      } else {
-        Warn "Unexpected HTTP status: $($resp.StatusCode)"
-        throw "HTTP $($resp.StatusCode)"
+  }
+}
+
+# If no suitable datasource found, create a workspace-specific one
+if (-not $fabricDatasourceName) {
+  Log "No existing workspace-specific datasource found — creating new workspace-specific Fabric datasource"
+  $fabricDatasourceName = $workspaceSpecificDatasourceName
+  
+  $datasourceBody = @{
+    name = $fabricDatasourceName
+    kind = "PowerBI"
+    properties = @{
+      tenant = (& az account show --query tenantId -o tsv)
+      collection = @{
+        referenceName = $collectionName
+        type = "CollectionReference"
       }
-    } catch {
-      # Capture possible HTTP response body for debugging
-      $errBody = $null
-      $httpCode = $null
-      if ($_.Exception -and $_.Exception.Response) {
-        try {
-          $httpCode = [int]$_.Exception.Response.StatusCode
-          $sr = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-          $errBody = $sr.ReadToEnd()
-        } catch {}
-      }
-      if ($errBody) { Warn "Create error body: $errBody" }
-      Warn "Fabric datasource registration failed (HTTP $httpCode): $_"
-      # Re-check datasources and try to pick an existing PowerBI datasource as a fallback
-      try {
-        $existing = Invoke-SecureRestMethod -Uri "$endpoint/scan/datasources?api-version=2022-07-01-preview" -Headers $purviewHeaders -Method Get -ErrorAction Stop
-      } catch { $existing = @{ value = @() } }
-      $anyPbi = $null
-      if ($existing.value) { $anyPbi = $existing.value | Where-Object { $_.kind -eq 'PowerBI' } | Select-Object -First 1 }
-      if ($anyPbi) {
-        Warn "Found existing PowerBI datasource after failed create: $($anyPbi.name). Using it."
-        $fabricDatasourceName = $anyPbi.name
-        $collectionRef = $anyPbi.properties.collection.referenceName
-        if ($collectionRef) { $collectionId = $collectionRef }
-      } else {
-        # Instead of failing the entire provisioning, continue but mark that we couldn't register a datasource.
-        Warn "Could not create Fabric datasource in Purview (server returned ResourceNotFound or registration method not supported)."
-        Warn "Proceeding without a registered Purview datasource. Downstream Purview scan creation will be skipped."
-        # Leave the datasource name blank so downstream scripts can detect and skip scans.
-        $fabricDatasourceName = ''
-        $collectionId = ''
-        # do not exit; allow provisioning to continue
+      # Workspace-specific properties to limit scope
+      resourceGroup = $env:AZURE_RESOURCE_GROUP
+      subscriptionId = $env:AZURE_SUBSCRIPTION_ID
+      workspace = @{
+        id = $WorkspaceId
+        name = $WorkspaceName
       }
     }
+  } | ConvertTo-Json -Depth 10
+
+  try {
+    $resp = Invoke-SecureWebRequest -Uri "$endpoint/scan/datasources/${fabricDatasourceName}?api-version=2022-07-01-preview" -Headers (New-SecureHeaders -Token $purviewToken -AdditionalHeaders @{'Content-Type' = 'application/json'}) -Method Put -Body $datasourceBody -ErrorAction Stop
+    if ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 300) {
+      Log "Workspace-specific Fabric datasource '$fabricDatasourceName' registered successfully (HTTP $($resp.StatusCode))"
+    } else {
+      Warn "Unexpected HTTP status: $($resp.StatusCode)"
+      throw "HTTP $($resp.StatusCode)"
+    }
+  } catch {
+    # Fallback: try creating simplified workspace-specific datasource
+    Log "Failed to create enhanced workspace datasource, trying simplified approach..."
+    $simpleDatasourceBody = @{
+      name = $fabricDatasourceName
+      kind = "PowerBI"
+      properties = @{
+        tenant = (& az account show --query tenantId -o tsv)
+        collection = @{
+          referenceName = $collectionName
+          type = "CollectionReference"  
+        }
+      }
+    } | ConvertTo-Json -Depth 5
+    
+    try {
+      $resp = Invoke-SecureWebRequest -Uri "$endpoint/scan/datasources/${fabricDatasourceName}?api-version=2022-07-01-preview" -Headers (New-SecureHeaders -Token $purviewToken -AdditionalHeaders @{'Content-Type' = 'application/json'}) -Method Put -Body $simpleDatasourceBody -ErrorAction Stop
+      if ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 300) {
+        Log "Simplified workspace Fabric datasource '$fabricDatasourceName' registered successfully (HTTP $($resp.StatusCode))"
+      } else {
+        Fail "Failed to register workspace-specific Fabric datasource: HTTP $($resp.StatusCode)"
+      }
+    } catch {
+      $errBody = $null
+      if ($_.Exception -and $_.Exception.Response) {
+        try {
+          $errBody = $_.Exception.Response.Content.ReadAsStringAsync().Result
+        } catch { }
+      }
+      Log "Error registering workspace Fabric datasource: $($_.Exception.Message)" -Level "ERROR"
+      if ($errBody) { Log "Response body: $errBody" -Level "ERROR" }
+      Fail "Failed to register workspace-specific Fabric datasource"
+    }
   }
+}
+
+if (-not $fabricDatasourceName) {
+  Fail "Failed to register or find any suitable Fabric datasource"
 }
 
 Log "Fabric datasource registration completed: $fabricDatasourceName"
