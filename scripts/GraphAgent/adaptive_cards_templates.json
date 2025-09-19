@@ -1,0 +1,1583 @@
+{
+  "adaptive_cards_library": {
+    "version": "1.0.0",
+    "description": "Comprehensive Adaptive Cards templates for Document Discovery Agent Teams integration",
+    "created": "2024-09-17T00:00:00Z"
+  },
+  "cards": [
+    {
+      "id": "search_parameters_card",
+      "name": "Document Search Configuration",
+      "description": "Interactive form for configuring document search parameters",
+      "category": "configuration",
+      "schema": {
+        "type": "AdaptiveCard",
+        "version": "1.5",
+        "body": [
+          {
+            "type": "TextBlock",
+            "text": "🔍 Document Search Configuration",
+            "weight": "Bolder",
+            "size": "Large",
+            "color": "Accent",
+            "horizontalAlignment": "Center"
+          },
+          {
+            "type": "TextBlock",
+            "text": "Configure your search parameters to find organizational documents across Microsoft 365",
+            "wrap": true,
+            "spacing": "Medium",
+            "color": "Default"
+          },
+          {
+            "type": "Container",
+            "style": "emphasis",
+            "items": [
+              {
+                "type": "Input.Text",
+                "id": "search_terms",
+                "label": "🏢 Search Terms",
+                "placeholder": "e.g., Contoso, Fabrikam, Microsoft Partner Network",
+                "isRequired": true,
+                "errorMessage": "Please enter at least one search term",
+                "maxLength": 500
+              },
+              {
+                "type": "Input.Text",
+                "id": "additional_keywords",
+                "label": "🔤 Additional Keywords (optional)",
+                "placeholder": "e.g., contract, agreement, partnership, project",
+                "maxLength": 200
+              }
+            ]
+          },
+          {
+            "type": "ColumnSet",
+            "columns": [
+              {
+                "type": "Column",
+                "width": "stretch",
+                "items": [
+                  {
+                    "type": "Input.ChoiceSet",
+                    "id": "file_types",
+                    "label": "📄 File Types",
+                    "isMultiSelect": true,
+                    "value": "docx,xlsx,pptx,pdf",
+                    "choices": [
+                      {
+                        "title": "Word Documents (.docx)",
+                        "value": "docx"
+                      },
+                      {
+                        "title": "Excel Spreadsheets (.xlsx)",
+                        "value": "xlsx"
+                      },
+                      {
+                        "title": "PowerPoint Presentations (.pptx)",
+                        "value": "pptx"
+                      },
+                      {
+                        "title": "PDF Documents (.pdf)",
+                        "value": "pdf"
+                      },
+                      {
+                        "title": "Text Files (.txt)",
+                        "value": "txt"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "Column",
+                "width": "stretch",
+                "items": [
+                  {
+                    "type": "Input.ChoiceSet",
+                    "id": "sources",
+                    "label": "📂 Sources to Search",
+                    "isMultiSelect": true,
+                    "value": "SharePoint,OneDrive,Teams",
+                    "choices": [
+                      {
+                        "title": "SharePoint Sites",
+                        "value": "SharePoint"
+                      },
+                      {
+                        "title": "OneDrive Files",
+                        "value": "OneDrive"
+                      },
+                      {
+                        "title": "Teams Messages & Files",
+                        "value": "Teams"
+                      },
+                      {
+                        "title": "Outlook Emails",
+                        "value": "Outlook"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "ColumnSet",
+            "columns": [
+              {
+                "type": "Column",
+                "width": "stretch",
+                "items": [
+                  {
+                    "type": "Input.Number",
+                    "id": "days_back",
+                    "label": "📅 Search Period (days)",
+                    "value": 90,
+                    "min": 1,
+                    "max": 365,
+                    "placeholder": "90"
+                  }
+                ]
+              },
+              {
+                "type": "Column",
+                "width": "stretch",
+                "items": [
+                  {
+                    "type": "Input.Number",
+                    "id": "max_results",
+                    "label": "📊 Max Results per Term",
+                    "value": 50,
+                    "min": 10,
+                    "max": 200,
+                    "placeholder": "50"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Input.ChoiceSet",
+            "id": "relevance_threshold",
+            "label": "🎯 Relevance Threshold",
+            "style": "compact",
+            "value": "medium",
+            "choices": [
+              {
+                "title": "Low (0.5) - More results, less relevant",
+                "value": "low"
+              },
+              {
+                "title": "Medium (0.7) - Balanced relevance",
+                "value": "medium"
+              },
+              {
+                "title": "High (0.9) - Fewer results, highly relevant",
+                "value": "high"
+              }
+            ]
+          },
+          {
+            "type": "Input.Toggle",
+            "id": "include_summaries",
+            "title": "🤖 Generate AI Summaries",
+            "value": true
+          },
+          {
+            "type": "Input.Toggle",
+            "id": "save_to_lakehouse",
+            "title": "💾 Save Results to Lakehouse",
+            "value": false
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.Submit",
+            "title": "🚀 Start Search",
+            "style": "positive",
+            "data": {
+              "action": "start_configured_search",
+              "workflow_type": "search"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "🏢 Use Lakehouse Metadata",
+            "style": "default",
+            "data": {
+              "action": "use_metadata_search",
+              "workflow_type": "metadata_enhanced"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "🔄 Reset Form",
+            "style": "destructive",
+            "data": {
+              "action": "reset_form"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "search_results_card",
+      "name": "Document Search Results",
+      "description": "Display search results with actionable options",
+      "category": "results",
+      "schema": {
+        "type": "AdaptiveCard",
+        "version": "1.5",
+        "body": [
+          {
+            "type": "TextBlock",
+            "text": "📄 Search Results",
+            "weight": "Bolder",
+            "size": "Large",
+            "color": "Accent"
+          },
+          {
+            "type": "FactSet",
+            "facts": [
+              {
+                "title": "Documents Found",
+                "value": "{result_count}"
+              },
+              {
+                "title": "Search Terms",
+                "value": "{search_terms}"
+              },
+              {
+                "title": "Sources",
+                "value": "{sources}"
+              },
+              {
+                "title": "Date Range",
+                "value": "{date_range}"
+              },
+              {
+                "title": "Processing Time",
+                "value": "{processing_time}"
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "when": "{result_count > 0}",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "**📋 Top Results:**",
+                "weight": "Bolder",
+                "spacing": "Medium"
+              },
+              {
+                "type": "Container",
+                "items": [
+                  {
+                    "type": "TextBlock",
+                    "text": "{top_results_formatted}",
+                    "wrap": true,
+                    "spacing": "Small"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "when": "{has_statistics}",
+            "style": "emphasis",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "📊 **Statistics:**",
+                "weight": "Bolder"
+              },
+              {
+                "type": "ColumnSet",
+                "columns": [
+                  {
+                    "type": "Column",
+                    "width": "stretch",
+                    "items": [
+                      {
+                        "type": "FactSet",
+                        "facts": [
+                          {
+                            "title": "SharePoint",
+                            "value": "{sharepoint_count}"
+                          },
+                          {
+                            "title": "OneDrive",
+                            "value": "{onedrive_count}"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "Column",
+                    "width": "stretch",
+                    "items": [
+                      {
+                        "type": "FactSet",
+                        "facts": [
+                          {
+                            "title": "Teams",
+                            "value": "{teams_count}"
+                          },
+                          {
+                            "title": "Avg. Relevance",
+                            "value": "{avg_relevance}"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.Submit",
+            "title": "🤖 Generate AI Summaries",
+            "style": "positive",
+            "when": "{result_count > 0}",
+            "data": {
+              "action": "generate_summaries",
+              "workflow_data": "{workflow_state}"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "💾 Save to Lakehouse",
+            "style": "default",
+            "when": "{result_count > 0}",
+            "data": {
+              "action": "save_lakehouse",
+              "workflow_data": "{workflow_state}"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "📤 Export Results",
+            "style": "default",
+            "when": "{result_count > 0}",
+            "data": {
+              "action": "export_results",
+              "format": "excel"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "🔍 Refine Search",
+            "style": "default",
+            "data": {
+              "action": "refine_search",
+              "current_params": "{search_parameters}"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "🆕 New Search",
+            "style": "default",
+            "data": {
+              "action": "new_search"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "summary_results_card",
+      "name": "AI Summary Results",
+      "description": "Display AI-generated document summaries with insights",
+      "category": "results",
+      "schema": {
+        "type": "AdaptiveCard",
+        "version": "1.5",
+        "body": [
+          {
+            "type": "TextBlock",
+            "text": "🤖 AI Summary Results",
+            "weight": "Bolder",
+            "size": "Large",
+            "color": "Good"
+          },
+          {
+            "type": "FactSet",
+            "facts": [
+              {
+                "title": "Documents Analyzed",
+                "value": "{analyzed_count}"
+              },
+              {
+                "title": "Successful Summaries",
+                "value": "{success_count}"
+              },
+              {
+                "title": "Processing Time",
+                "value": "{processing_time}"
+              },
+              {
+                "title": "AI Model",
+                "value": "{model_name}"
+              },
+              {
+                "title": "Total Tokens Used",
+                "value": "{total_tokens}"
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "style": "emphasis",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "🔍 **Key Insights:**",
+                "weight": "Bolder"
+              },
+              {
+                "type": "TextBlock",
+                "text": "{key_insights_formatted}",
+                "wrap": true
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "when": "{has_action_items}",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "⚡ **Action Items Detected:**",
+                "weight": "Bolder",
+                "color": "Warning"
+              },
+              {
+                "type": "TextBlock",
+                "text": "{action_items_formatted}",
+                "wrap": true
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "when": "{has_decisions}",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "✅ **Key Decisions:**",
+                "weight": "Bolder",
+                "color": "Good"
+              },
+              {
+                "type": "TextBlock",
+                "text": "{decisions_formatted}",
+                "wrap": true
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "when": "{has_risks}",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "⚠️ **Risks Identified:**",
+                "weight": "Bolder",
+                "color": "Attention"
+              },
+              {
+                "type": "TextBlock",
+                "text": "{risks_formatted}",
+                "wrap": true
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.Submit",
+            "title": "📊 View Detailed Report",
+            "style": "positive",
+            "data": {
+              "action": "view_detailed_report",
+              "results": "{summary_results}"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "💾 Save to Lakehouse",
+            "style": "default",
+            "data": {
+              "action": "save_summaries_lakehouse",
+              "results": "{summary_results}"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "📤 Export Summaries",
+            "style": "default",
+            "data": {
+              "action": "export_summaries",
+              "format": "markdown"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "📧 Share via Email",
+            "style": "default",
+            "data": {
+              "action": "share_email",
+              "content_type": "summaries"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "🔄 Analyze More Documents",
+            "style": "default",
+            "data": {
+              "action": "analyze_more"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "domain_extraction_card",
+      "name": "Domain Extraction Results",
+      "description": "Display extracted organizational domains with search options",
+      "category": "results",
+      "schema": {
+        "type": "AdaptiveCard",
+        "version": "1.5",
+        "body": [
+          {
+            "type": "TextBlock",
+            "text": "🏢 Domain Extraction Results",
+            "weight": "Bolder",
+            "size": "Large",
+            "color": "Accent"
+          },
+          {
+            "type": "FactSet",
+            "facts": [
+              {
+                "title": "Domains Found",
+                "value": "{domain_count}"
+              },
+              {
+                "title": "Search Terms Generated",
+                "value": "{search_terms_count}"
+              },
+              {
+                "title": "Data Sources",
+                "value": "{data_sources}"
+              },
+              {
+                "title": "Extraction Time",
+                "value": "{processing_time}"
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "when": "{domain_count > 0}",
+            "style": "emphasis",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "🏷️ **Extracted Domains:**",
+                "weight": "Bolder"
+              },
+              {
+                "type": "Input.ChoiceSet",
+                "id": "selected_domains",
+                "style": "filtered",
+                "isMultiSelect": true,
+                "choices": "{domain_choices}",
+                "placeholder": "Select domains to search..."
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "when": "{has_metadata_insights}",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "📊 **Metadata Insights:**",
+                "weight": "Bolder"
+              },
+              {
+                "type": "TextBlock",
+                "text": "{metadata_insights}",
+                "wrap": true
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.Submit",
+            "title": "🔍 Search Selected Domains",
+            "style": "positive",
+            "when": "{domain_count > 0}",
+            "data": {
+              "action": "search_selected_domains",
+              "domain_source": "manual_selection"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "🎯 Search All Domains",
+            "style": "default",
+            "when": "{domain_count > 0}",
+            "data": {
+              "action": "search_all_domains",
+              "domains": "{all_domains}"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "📊 Analyze Domain Patterns",
+            "style": "default",
+            "when": "{domain_count > 0}",
+            "data": {
+              "action": "analyze_domain_patterns"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "💾 Save Domain List",
+            "style": "default",
+            "data": {
+              "action": "save_domain_list"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "🔄 Re-extract Domains",
+            "style": "default",
+            "data": {
+              "action": "reextract_domains"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "workflow_progress_card",
+      "name": "Workflow Progress Tracker",
+      "description": "Real-time progress tracking for long-running workflows",
+      "category": "status",
+      "schema": {
+        "type": "AdaptiveCard",
+        "version": "1.5",
+        "body": [
+          {
+            "type": "TextBlock",
+            "text": "⚙️ Workflow Progress",
+            "weight": "Bolder",
+            "size": "Large",
+            "color": "Accent"
+          },
+          {
+            "type": "TextBlock",
+            "text": "Current Operation: {current_operation}",
+            "weight": "Bolder",
+            "color": "Default"
+          },
+          {
+            "type": "ProgressBar",
+            "value": "{progress_percentage}"
+          },
+          {
+            "type": "FactSet",
+            "facts": [
+              {
+                "title": "Workflow Type",
+                "value": "{workflow_type}"
+              },
+              {
+                "title": "Started",
+                "value": "{start_time}"
+              },
+              {
+                "title": "Estimated Completion",
+                "value": "{estimated_completion}"
+              },
+              {
+                "title": "Current Step",
+                "value": "{current_step} of {total_steps}"
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "style": "emphasis",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "📋 **Step Details:**",
+                "weight": "Bolder"
+              },
+              {
+                "type": "Container",
+                "items": "{step_status_items}"
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "when": "{has_intermediate_results}",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "📊 **Intermediate Results:**",
+                "weight": "Bolder"
+              },
+              {
+                "type": "TextBlock",
+                "text": "{intermediate_results}",
+                "wrap": true
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.Submit",
+            "title": "🔄 Refresh Status",
+            "style": "default",
+            "data": {
+              "action": "refresh_progress",
+              "workflow_id": "{workflow_id}"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "⏸️ Pause Workflow",
+            "style": "default",
+            "when": "{can_pause}",
+            "data": {
+              "action": "pause_workflow",
+              "workflow_id": "{workflow_id}"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "❌ Cancel Workflow",
+            "style": "destructive",
+            "data": {
+              "action": "cancel_workflow",
+              "workflow_id": "{workflow_id}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "error_notification_card",
+      "name": "Error Notification",
+      "description": "User-friendly error display with troubleshooting options",
+      "category": "status",
+      "schema": {
+        "type": "AdaptiveCard",
+        "version": "1.5",
+        "body": [
+          {
+            "type": "TextBlock",
+            "text": "❌ Operation Failed",
+            "weight": "Bolder",
+            "size": "Large",
+            "color": "Attention"
+          },
+          {
+            "type": "TextBlock",
+            "text": "{error_message}",
+            "wrap": true,
+            "color": "Attention"
+          },
+          {
+            "type": "FactSet",
+            "facts": [
+              {
+                "title": "Error Code",
+                "value": "{error_code}"
+              },
+              {
+                "title": "Operation",
+                "value": "{failed_operation}"
+              },
+              {
+                "title": "Timestamp",
+                "value": "{error_timestamp}"
+              },
+              {
+                "title": "Retry Count",
+                "value": "{retry_count}"
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "when": "{has_troubleshooting_steps}",
+            "style": "emphasis",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "🔧 **Troubleshooting Steps:**",
+                "weight": "Bolder"
+              },
+              {
+                "type": "TextBlock",
+                "text": "{troubleshooting_steps}",
+                "wrap": true
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "when": "{has_partial_results}",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "⚠️ **Partial Results Available:**",
+                "weight": "Bolder",
+                "color": "Warning"
+              },
+              {
+                "type": "TextBlock",
+                "text": "{partial_results_description}",
+                "wrap": true
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.Submit",
+            "title": "🔄 Retry Operation",
+            "style": "positive",
+            "when": "{can_retry}",
+            "data": {
+              "action": "retry_operation",
+              "operation_id": "{operation_id}",
+              "retry_count": "{retry_count}"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "📊 View Partial Results",
+            "style": "default",
+            "when": "{has_partial_results}",
+            "data": {
+              "action": "view_partial_results",
+              "results": "{partial_results}"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "🆘 Get Help",
+            "style": "default",
+            "data": {
+              "action": "get_help",
+              "error_context": "{error_context}"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "📧 Report Issue",
+            "style": "default",
+            "data": {
+              "action": "report_issue",
+              "error_details": "{error_details}"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "🏠 Return to Main Menu",
+            "style": "default",
+            "data": {
+              "action": "main_menu"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "export_options_card",
+      "name": "Export Options",
+      "description": "Configure export settings for search results and summaries",
+      "category": "configuration",
+      "schema": {
+        "type": "AdaptiveCard",
+        "version": "1.5",
+        "body": [
+          {
+            "type": "TextBlock",
+            "text": "📤 Export Configuration",
+            "weight": "Bolder",
+            "size": "Large",
+            "color": "Accent"
+          },
+          {
+            "type": "TextBlock",
+            "text": "Configure how you want to export your results",
+            "wrap": true,
+            "spacing": "Medium"
+          },
+          {
+            "type": "Input.ChoiceSet",
+            "id": "export_format",
+            "label": "📄 Export Format",
+            "style": "compact",
+            "value": "excel",
+            "choices": [
+              {
+                "title": "📊 Excel Spreadsheet (.xlsx)",
+                "value": "excel"
+              },
+              {
+                "title": "📝 Markdown Report (.md)",
+                "value": "markdown"
+              },
+              {
+                "title": "📋 JSON Data (.json)",
+                "value": "json"
+              },
+              {
+                "title": "📑 PDF Report (.pdf)",
+                "value": "pdf"
+              },
+              {
+                "title": "📄 Word Document (.docx)",
+                "value": "word"
+              }
+            ]
+          },
+          {
+            "type": "Input.ChoiceSet",
+            "id": "content_sections",
+            "label": "📚 Content to Include",
+            "isMultiSelect": true,
+            "value": "results,summaries,statistics",
+            "choices": [
+              {
+                "title": "🔍 Search Results",
+                "value": "results"
+              },
+              {
+                "title": "🤖 AI Summaries",
+                "value": "summaries"
+              },
+              {
+                "title": "📊 Statistics & Metrics",
+                "value": "statistics"
+              },
+              {
+                "title": "⚡ Action Items",
+                "value": "action_items"
+              },
+              {
+                "title": "✅ Key Decisions",
+                "value": "decisions"
+              },
+              {
+                "title": "⚠️ Risks & Issues",
+                "value": "risks"
+              },
+              {
+                "title": "🏢 Domain Metadata",
+                "value": "metadata"
+              }
+            ]
+          },
+          {
+            "type": "ColumnSet",
+            "columns": [
+              {
+                "type": "Column",
+                "width": "stretch",
+                "items": [
+                  {
+                    "type": "Input.Toggle",
+                    "id": "include_metadata",
+                    "title": "Include Document Metadata",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "type": "Column",
+                "width": "stretch",
+                "items": [
+                  {
+                    "type": "Input.Toggle",
+                    "id": "include_links",
+                    "title": "Include Source Links",
+                    "value": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Input.Text",
+            "id": "custom_filename",
+            "label": "📁 Custom Filename (optional)",
+            "placeholder": "e.g., OrganizationAnalysis_2024",
+            "maxLength": 100
+          },
+          {
+            "type": "Input.ChoiceSet",
+            "id": "delivery_method",
+            "label": "🚀 Delivery Method",
+            "style": "compact",
+            "value": "download",
+            "choices": [
+              {
+                "title": "💾 Download Link",
+                "value": "download"
+              },
+              {
+                "title": "📧 Email Attachment",
+                "value": "email"
+              },
+              {
+                "title": "☁️ OneDrive Upload",
+                "value": "onedrive"
+              },
+              {
+                "title": "📂 SharePoint Upload",
+                "value": "sharepoint"
+              }
+            ]
+          },
+          {
+            "type": "Input.Text",
+            "id": "delivery_location",
+            "label": "📍 Delivery Location",
+            "placeholder": "Email address, SharePoint site, or OneDrive folder",
+            "when": "{delivery_method != 'download'}"
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.Submit",
+            "title": "📤 Generate Export",
+            "style": "positive",
+            "data": {
+              "action": "generate_export",
+              "export_type": "configured"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "👁️ Preview Export",
+            "style": "default",
+            "data": {
+              "action": "preview_export"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "❌ Cancel",
+            "style": "default",
+            "data": {
+              "action": "cancel_export"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "help_menu_card",
+      "name": "Help & Support Menu",
+      "description": "Comprehensive help system with tutorials and support options",
+      "category": "help",
+      "schema": {
+        "type": "AdaptiveCard",
+        "version": "1.5",
+        "body": [
+          {
+            "type": "TextBlock",
+            "text": "🆘 Help & Support",
+            "weight": "Bolder",
+            "size": "Large",
+            "color": "Accent",
+            "horizontalAlignment": "Center"
+          },
+          {
+            "type": "TextBlock",
+            "text": "Welcome to the Document Discovery Agent! Choose from the options below:",
+            "wrap": true,
+            "spacing": "Medium",
+            "horizontalAlignment": "Center"
+          },
+          {
+            "type": "Container",
+            "style": "emphasis",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "🚀 **Quick Start**",
+                "weight": "Bolder",
+                "color": "Good"
+              },
+              {
+                "type": "ActionSet",
+                "actions": [
+                  {
+                    "type": "Action.Submit",
+                    "title": "📖 Getting Started Tutorial",
+                    "data": {
+                      "action": "show_tutorial",
+                      "tutorial_type": "getting_started"
+                    }
+                  },
+                  {
+                    "type": "Action.Submit",
+                    "title": "🎯 Example Searches",
+                    "data": {
+                      "action": "show_examples",
+                      "example_type": "searches"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "⚙️ **Features & Commands**",
+                "weight": "Bolder",
+                "color": "Accent"
+              },
+              {
+                "type": "FactSet",
+                "facts": [
+                  {
+                    "title": "🔍 search [term]",
+                    "value": "Find documents mentioning specific organizations"
+                  },
+                  {
+                    "title": "🎯 analyze [org]",
+                    "value": "Comprehensive analysis with AI summaries"
+                  },
+                  {
+                    "title": "🏢 domains",
+                    "value": "Extract organizational identifiers from metadata"
+                  },
+                  {
+                    "title": "🎛️ card",
+                    "value": "Interactive configuration interface"
+                  },
+                  {
+                    "title": "📤 export",
+                    "value": "Export results in various formats"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "🔧 **Troubleshooting**",
+                "weight": "Bolder",
+                "color": "Warning"
+              },
+              {
+                "type": "ActionSet",
+                "actions": [
+                  {
+                    "type": "Action.Submit",
+                    "title": "❌ Common Errors",
+                    "data": {
+                      "action": "show_troubleshooting",
+                      "issue_type": "errors"
+                    }
+                  },
+                  {
+                    "type": "Action.Submit",
+                    "title": "🔐 Permission Issues",
+                    "data": {
+                      "action": "show_troubleshooting",
+                      "issue_type": "permissions"
+                    }
+                  },
+                  {
+                    "type": "Action.Submit",
+                    "title": "⚡ Performance Tips",
+                    "data": {
+                      "action": "show_troubleshooting",
+                      "issue_type": "performance"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.Submit",
+            "title": "🎛️ Open Interactive Card",
+            "style": "positive",
+            "data": {
+              "action": "show_interactive_card"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "📧 Contact Support",
+            "style": "default",
+            "data": {
+              "action": "contact_support"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "📚 View Documentation",
+            "style": "default",
+            "data": {
+              "action": "view_documentation"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "🏠 Main Menu",
+            "style": "default",
+            "data": {
+              "action": "main_menu"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "lakehouse_ingestion_card",
+      "name": "Lakehouse Ingestion Options",
+      "description": "Configure lakehouse data ingestion settings",
+      "category": "configuration",
+      "schema": {
+        "type": "AdaptiveCard",
+        "version": "1.5",
+        "body": [
+          {
+            "type": "TextBlock",
+            "text": "💾 Lakehouse Ingestion Configuration",
+            "weight": "Bolder",
+            "size": "Large",
+            "color": "Accent"
+          },
+          {
+            "type": "TextBlock",
+            "text": "Configure how your document analysis results will be stored in the Fabric lakehouse",
+            "wrap": true,
+            "spacing": "Medium"
+          },
+          {
+            "type": "Input.Text",
+            "id": "lakehouse_name",
+            "label": "🏠 Lakehouse Name",
+            "value": "{default_lakehouse}",
+            "isRequired": true
+          },
+          {
+            "type": "Input.Text",
+            "id": "workspace_name",
+            "label": "🏢 Workspace Name",
+            "value": "{default_workspace}",
+            "isRequired": true
+          },
+          {
+            "type": "Input.Text",
+            "id": "table_name",
+            "label": "📋 Table Name",
+            "placeholder": "e.g., document_summaries_2024",
+            "value": "document_summaries_{current_date}"
+          },
+          {
+            "type": "Input.ChoiceSet",
+            "id": "update_mode",
+            "label": "🔄 Update Mode",
+            "style": "compact",
+            "value": "append",
+            "choices": [
+              {
+                "title": "➕ Append - Add new records",
+                "value": "append"
+              },
+              {
+                "title": "🔄 Overwrite - Replace all data",
+                "value": "overwrite"
+              },
+              {
+                "title": "🔀 Merge - Update existing, add new",
+                "value": "merge"
+              }
+            ]
+          },
+          {
+            "type": "ColumnSet",
+            "columns": [
+              {
+                "type": "Column",
+                "width": "stretch",
+                "items": [
+                  {
+                    "type": "Input.Toggle",
+                    "id": "enable_partitioning",
+                    "title": "Enable Date Partitioning",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "type": "Column",
+                "width": "stretch",
+                "items": [
+                  {
+                    "type": "Input.Toggle",
+                    "id": "generate_notebook",
+                    "title": "Generate Processing Notebook",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Input.ChoiceSet",
+            "id": "data_quality_checks",
+            "label": "✅ Data Quality Checks",
+            "isMultiSelect": true,
+            "value": "duplicates,completeness,format",
+            "choices": [
+              {
+                "title": "Duplicate Detection",
+                "value": "duplicates"
+              },
+              {
+                "title": "Data Completeness",
+                "value": "completeness"
+              },
+              {
+                "title": "Format Validation",
+                "value": "format"
+              },
+              {
+                "title": "Schema Compliance",
+                "value": "schema"
+              }
+            ]
+          },
+          {
+            "type": "Container",
+            "style": "emphasis",
+            "items": [
+              {
+                "type": "TextBlock",
+                "text": "📊 **Estimated Storage Impact:**",
+                "weight": "Bolder"
+              },
+              {
+                "type": "FactSet",
+                "facts": [
+                  {
+                    "title": "Records to Process",
+                    "value": "{record_count}"
+                  },
+                  {
+                    "title": "Estimated Size",
+                    "value": "{estimated_size}"
+                  },
+                  {
+                    "title": "Processing Time",
+                    "value": "{estimated_time}"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.Submit",
+            "title": "💾 Start Ingestion",
+            "style": "positive",
+            "data": {
+              "action": "start_lakehouse_ingestion",
+              "validation_required": true
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "👁️ Preview Data",
+            "style": "default",
+            "data": {
+              "action": "preview_ingestion_data"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "🔍 Test Connection",
+            "style": "default",
+            "data": {
+              "action": "test_lakehouse_connection"
+            }
+          },
+          {
+            "type": "Action.Submit",
+            "title": "❌ Cancel",
+            "style": "default",
+            "data": {
+              "action": "cancel_ingestion"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "card_templates": {
+    "success_notification": {
+      "type": "Container",
+      "style": "good",
+      "items": [
+        {
+          "type": "TextBlock",
+          "text": "✅ {success_message}",
+          "weight": "Bolder",
+          "color": "Good"
+        }
+      ]
+    },
+    "warning_notification": {
+      "type": "Container",
+      "style": "warning", 
+      "items": [
+        {
+          "type": "TextBlock",
+          "text": "⚠️ {warning_message}",
+          "weight": "Bolder",
+          "color": "Warning"
+        }
+      ]
+    },
+    "info_notification": {
+      "type": "Container",
+      "style": "emphasis",
+      "items": [
+        {
+          "type": "TextBlock",
+          "text": "ℹ️ {info_message}",
+          "wrap": true,
+          "color": "Default"
+        }
+      ]
+    }
+  },
+  "formatting_helpers": {
+    "document_result_item": {
+      "type": "Container",
+      "items": [
+        {
+          "type": "ColumnSet",
+          "columns": [
+            {
+              "type": "Column",
+              "width": "stretch",
+              "items": [
+                {
+                  "type": "TextBlock",
+                  "text": "📄 **{document_name}**",
+                  "weight": "Bolder",
+                  "size": "Small"
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "{document_summary}",
+                  "wrap": true,
+                  "size": "Small",
+                  "maxLines": 2
+                }
+              ]
+            },
+            {
+              "type": "Column",
+              "width": "auto",
+              "items": [
+                {
+                  "type": "TextBlock",
+                  "text": "{source_icon}",
+                  "size": "Small"
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "{last_modified}",
+                  "size": "Small",
+                  "color": "Default"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "spacing": "Small"
+    },
+    "progress_step_item": {
+      "type": "Container",
+      "items": [
+        {
+          "type": "ColumnSet",
+          "columns": [
+            {
+              "type": "Column",
+              "width": "auto",
+              "items": [
+                {
+                  "type": "TextBlock",
+                  "text": "{step_icon}",
+                  "size": "Medium"
+                }
+              ]
+            },
+            {
+              "type": "Column",
+              "width": "stretch",
+              "items": [
+                {
+                  "type": "TextBlock",
+                  "text": "{step_name}",
+                  "weight": "Bolder",
+                  "size": "Small"
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "{step_status}",
+                  "size": "Small",
+                  "color": "{step_color}"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "spacing": "Small"
+    }
+  }
+}

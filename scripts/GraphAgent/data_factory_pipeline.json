@@ -1,0 +1,751 @@
+{
+  "name": "DocumentDiscoveryPipeline",
+  "description": "Azure Data Factory pipeline for orchestrating end-to-end document discovery and analysis workflow",
+  "type": "Pipeline",
+  "apiVersion": "2018-06-01",
+  "properties": {
+    "description": "Orchestrates the complete document discovery workflow: metadata extraction -> Graph search -> AI summarization -> lakehouse ingestion",
+    "activities": [
+      {
+        "name": "ExtractDomainMetadata",
+        "type": "AzurePowerShellScript",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [
+          {
+            "name": "Stage",
+            "value": "Metadata Extraction"
+          }
+        ],
+        "typeProperties": {
+          "azurePowerShellVersion": "7.0",
+          "scriptPath": {
+            "value": "@pipeline().parameters.ScriptsBasePath/01_extract_domain_metadata.ps1",
+            "type": "Expression"
+          },
+          "scriptArguments": {
+            "value": "-OutputFile @{pipeline().parameters.WorkingDirectory}/metadata.json -LakehouseName @{pipeline().parameters.FabricLakehouseName} -WorkspaceName @{pipeline().parameters.FabricWorkspaceName} -PurviewAccount @{pipeline().parameters.PurviewAccountName}",
+            "type": "Expression"
+          },
+          "linkedServiceName": {
+            "referenceName": "AzurePowerShellLinkedService",
+            "type": "LinkedServiceReference"
+          }
+        }
+      },
+      {
+        "name": "CheckMetadataResults",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "ExtractDomainMetadata",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [
+          {
+            "name": "Stage",
+            "value": "Metadata Validation"
+          }
+        ],
+        "typeProperties": {
+          "expression": {
+            "value": "@greater(length(activity('ExtractDomainMetadata').output.extractedDomains), 0)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "SearchGraphDocuments",
+              "type": "AzurePowerShellScript",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.02:00:00",
+                "retry": 3,
+                "retryIntervalInSeconds": 60,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [
+                {
+                  "name": "Stage",
+                  "value": "Document Search"
+                }
+              ],
+              "typeProperties": {
+                "azurePowerShellVersion": "7.0",
+                "scriptPath": {
+                  "value": "@pipeline().parameters.ScriptsBasePath/02_search_graph_documents.ps1",
+                  "type": "Expression"
+                },
+                "scriptArguments": {
+                  "value": "-InputFile @{pipeline().parameters.WorkingDirectory}/metadata.json -OutputFile @{pipeline().parameters.WorkingDirectory}/search_results.json -MaxResults @{pipeline().parameters.MaxSearchResults} -DaysBack @{pipeline().parameters.SearchDaysBack} -FileTypes @{pipeline().parameters.FileTypesToSearch}",
+                  "type": "Expression"
+                },
+                "linkedServiceName": {
+                  "referenceName": "AzurePowerShellLinkedService",
+                  "type": "LinkedServiceReference"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": [
+            {
+              "name": "LogNoMetadata",
+              "type": "WebActivity",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.00:01:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "url": {
+                  "value": "@pipeline().parameters.LogAnalyticsEndpoint",
+                  "type": "Expression"
+                },
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "pipeline": "@pipeline().RunId",
+                  "stage": "metadata_extraction",
+                  "status": "warning",
+                  "message": "No domain metadata extracted, skipping document search",
+                  "timestamp": "@utcnow()"
+                },
+                "authentication": {
+                  "type": "MSI",
+                  "resource": "https://api.loganalytics.io"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "CheckSearchResults",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "CheckMetadataResults",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [
+          {
+            "name": "Stage",
+            "value": "Search Results Validation"
+          }
+        ],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(activity('CheckMetadataResults').output.ifTrueActivities[0].output.statistics.totalResults, greater(int(activity('CheckMetadataResults').output.ifTrueActivities[0].output.statistics.totalResults), 0))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ParallelSummarization",
+              "type": "ForEach",
+              "dependsOn": [],
+              "userProperties": [
+                {
+                  "name": "Stage",
+                  "value": "AI Summarization"
+                }
+              ],
+              "typeProperties": {
+                "items": {
+                  "value": "@range(0, div(int(activity('CheckMetadataResults').output.ifTrueActivities[0].output.statistics.totalResults), int(pipeline().parameters.BatchSize)))",
+                  "type": "Expression"
+                },
+                "batchCount": 3,
+                "activities": [
+                  {
+                    "name": "SummarizeDocumentBatch",
+                    "type": "AzurePowerShellScript",
+                    "dependsOn": [],
+                    "policy": {
+                      "timeout": "0.05:00:00",
+                      "retry": 2,
+                      "retryIntervalInSeconds": 120,
+                      "secureOutput": false,
+                      "secureInput": false
+                    },
+                    "userProperties": [],
+                    "typeProperties": {
+                      "azurePowerShellVersion": "7.0",
+                      "scriptPath": {
+                        "value": "@pipeline().parameters.ScriptsBasePath/03_summarize_documents.ps1",
+                        "type": "Expression"
+                      },
+                      "scriptArguments": {
+                        "value": "-InputFile @{pipeline().parameters.WorkingDirectory}/search_results.json -OutputFile @{pipeline().parameters.WorkingDirectory}/summaries_batch_@{item()}.json -MaxDocuments @{pipeline().parameters.BatchSize} -SkipDocuments @{mul(item(), int(pipeline().parameters.BatchSize))} -OutputFormat json",
+                        "type": "Expression"
+                      },
+                      "linkedServiceName": {
+                        "referenceName": "AzurePowerShellLinkedService",
+                        "type": "LinkedServiceReference"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "ifFalseActivities": [
+            {
+              "name": "LogNoSearchResults",
+              "type": "WebActivity",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.00:01:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "url": {
+                  "value": "@pipeline().parameters.LogAnalyticsEndpoint",
+                  "type": "Expression"
+                },
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "pipeline": "@pipeline().RunId",
+                  "stage": "document_search",
+                  "status": "warning",
+                  "message": "No documents found in search, skipping summarization",
+                  "timestamp": "@utcnow()"
+                },
+                "authentication": {
+                  "type": "MSI",
+                  "resource": "https://api.loganalytics.io"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "CombineSummaryBatches",
+        "type": "AzurePowerShellScript",
+        "dependsOn": [
+          {
+            "activity": "CheckSearchResults",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [
+          {
+            "name": "Stage",
+            "value": "Summary Consolidation"
+          }
+        ],
+        "typeProperties": {
+          "azurePowerShellVersion": "7.0",
+          "scriptPath": {
+            "value": "@pipeline().parameters.ScriptsBasePath/combine_summary_batches.ps1",
+            "type": "Expression"
+          },
+          "scriptArguments": {
+            "value": "-WorkingDirectory @{pipeline().parameters.WorkingDirectory} -OutputFile @{pipeline().parameters.WorkingDirectory}/combined_summaries.json",
+            "type": "Expression"
+          },
+          "linkedServiceName": {
+            "referenceName": "AzurePowerShellLinkedService",
+            "type": "LinkedServiceReference"
+          }
+        }
+      },
+      {
+        "name": "IngestToLakehouse",
+        "type": "AzurePowerShellScript",
+        "dependsOn": [
+          {
+            "activity": "CombineSummaryBatches",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.03:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 120,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [
+          {
+            "name": "Stage",
+            "value": "Lakehouse Ingestion"
+          }
+        ],
+        "typeProperties": {
+          "azurePowerShellVersion": "7.0",
+          "scriptPath": {
+            "value": "@pipeline().parameters.ScriptsBasePath/04_ingest_lakehouse.ps1",
+            "type": "Expression"
+          },
+          "scriptArguments": {
+            "value": "-InputFile @{pipeline().parameters.WorkingDirectory}/combined_summaries.json -LakehouseName @{pipeline().parameters.FabricLakehouseName} -WorkspaceName @{pipeline().parameters.FabricWorkspaceName} -TableName @{pipeline().parameters.TableName} -UpdateMode @{pipeline().parameters.UpdateMode}",
+            "type": "Expression"
+          },
+          "linkedServiceName": {
+            "referenceName": "AzurePowerShellLinkedService",
+            "type": "LinkedServiceReference"
+          }
+        }
+      },
+      {
+        "name": "GenerateReport",
+        "type": "AzurePowerShellScript",
+        "dependsOn": [
+          {
+            "activity": "IngestToLakehouse",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [
+          {
+            "name": "Stage",
+            "value": "Report Generation"
+          }
+        ],
+        "typeProperties": {
+          "azurePowerShellVersion": "7.0",
+          "scriptPath": {
+            "value": "@pipeline().parameters.ScriptsBasePath/generate_pipeline_report.ps1",
+            "type": "Expression"
+          },
+          "scriptArguments": {
+            "value": "-PipelineRunId @{pipeline().RunId} -WorkingDirectory @{pipeline().parameters.WorkingDirectory} -OutputFile @{pipeline().parameters.WorkingDirectory}/pipeline_report.json",
+            "type": "Expression"
+          },
+          "linkedServiceName": {
+            "referenceName": "AzurePowerShellLinkedService",
+            "type": "LinkedServiceReference"
+          }
+        }
+      },
+      {
+        "name": "SendNotification",
+        "type": "WebActivity",
+        "dependsOn": [
+          {
+            "activity": "GenerateReport",
+            "dependencyConditions": [
+              "Completed"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.00:02:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [
+          {
+            "name": "Stage",
+            "value": "Notification"
+          }
+        ],
+        "typeProperties": {
+          "url": {
+            "value": "@pipeline().parameters.TeamsWebhookUrl",
+            "type": "Expression"
+          },
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "type": "message",
+            "attachments": [
+              {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": {
+                  "type": "AdaptiveCard",
+                  "version": "1.3",
+                  "body": [
+                    {
+                      "type": "TextBlock",
+                      "text": "📊 Document Discovery Pipeline Complete",
+                      "weight": "Bolder",
+                      "size": "Large",
+                      "color": "@if(equals(activity('GenerateReport').status, 'Succeeded'), 'Good', 'Attention')"
+                    },
+                    {
+                      "type": "FactSet",
+                      "facts": [
+                        {
+                          "title": "Pipeline Run ID",
+                          "value": "@pipeline().RunId"
+                        },
+                        {
+                          "title": "Status",
+                          "value": "@activity('GenerateReport').status"
+                        },
+                        {
+                          "title": "Start Time",
+                          "value": "@pipeline().TriggerTime"
+                        },
+                        {
+                          "title": "Duration",
+                          "value": "@formatDateTime(utcnow(), 'HH:mm:ss')"
+                        },
+                        {
+                          "title": "Documents Processed",
+                          "value": "@coalesce(activity('CombineSummaryBatches').output.totalDocuments, '0')"
+                        },
+                        {
+                          "title": "Records Ingested",
+                          "value": "@coalesce(activity('IngestToLakehouse').output.statistics.recordsIngested, '0')"
+                        }
+                      ]
+                    }
+                  ],
+                  "actions": [
+                    {
+                      "type": "Action.OpenUrl",
+                      "title": "View Pipeline Run",
+                      "url": "@concat(pipeline().parameters.DataFactoryUrl, '/pipeline/', pipeline().RunId)"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "CleanupTempFiles",
+        "type": "AzurePowerShellScript",
+        "dependsOn": [
+          {
+            "activity": "SendNotification",
+            "dependencyConditions": [
+              "Completed"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.00:10:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [
+          {
+            "name": "Stage",
+            "value": "Cleanup"
+          }
+        ],
+        "typeProperties": {
+          "azurePowerShellVersion": "7.0",
+          "scriptPath": {
+            "value": "@pipeline().parameters.ScriptsBasePath/cleanup_temp_files.ps1",
+            "type": "Expression"
+          },
+          "scriptArguments": {
+            "value": "-WorkingDirectory @{pipeline().parameters.WorkingDirectory} -RetentionDays @{pipeline().parameters.TempFileRetentionDays}",
+            "type": "Expression"
+          },
+          "linkedServiceName": {
+            "referenceName": "AzurePowerShellLinkedService",
+            "type": "LinkedServiceReference"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "ScriptsBasePath": {
+        "type": "string",
+        "defaultValue": "./scripts/GraphAgent"
+      },
+      "WorkingDirectory": {
+        "type": "string",
+        "defaultValue": "temp/pipeline_@{formatDateTime(utcnow(), 'yyyyMMddHHmmss')}"
+      },
+      "FabricWorkspaceName": {
+        "type": "string",
+        "defaultValue": "@pipeline().globalParameters.FABRIC_WORKSPACE_NAME"
+      },
+      "FabricLakehouseName": {
+        "type": "string",
+        "defaultValue": "@pipeline().globalParameters.FABRIC_LAKEHOUSE_NAME"
+      },
+      "PurviewAccountName": {
+        "type": "string",
+        "defaultValue": "@pipeline().globalParameters.PURVIEW_ACCOUNT_NAME"
+      },
+      "TableName": {
+        "type": "string",
+        "defaultValue": "document_summaries_@{formatDateTime(utcnow(), 'yyyyMMdd')}"
+      },
+      "UpdateMode": {
+        "type": "string",
+        "defaultValue": "append"
+      },
+      "MaxSearchResults": {
+        "type": "int",
+        "defaultValue": 100
+      },
+      "SearchDaysBack": {
+        "type": "int",
+        "defaultValue": 90
+      },
+      "FileTypesToSearch": {
+        "type": "string",
+        "defaultValue": "docx,xlsx,pptx,pdf"
+      },
+      "BatchSize": {
+        "type": "int",
+        "defaultValue": 20
+      },
+      "TeamsWebhookUrl": {
+        "type": "string",
+        "defaultValue": "@pipeline().globalParameters.TEAMS_WEBHOOK_URL"
+      },
+      "LogAnalyticsEndpoint": {
+        "type": "string",
+        "defaultValue": "@pipeline().globalParameters.LOG_ANALYTICS_ENDPOINT"
+      },
+      "DataFactoryUrl": {
+        "type": "string",
+        "defaultValue": "@pipeline().globalParameters.DATA_FACTORY_URL"
+      },
+      "TempFileRetentionDays": {
+        "type": "int",
+        "defaultValue": 7
+      }
+    },
+    "variables": {
+      "CurrentStage": {
+        "type": "String",
+        "defaultValue": "Initialization"
+      },
+      "ProcessingErrors": {
+        "type": "Array",
+        "defaultValue": []
+      },
+      "TotalDocumentsProcessed": {
+        "type": "String",
+        "defaultValue": "0"
+      }
+    },
+    "folder": {
+      "name": "DocumentDiscovery"
+    },
+    "annotations": [
+      "document-discovery",
+      "ai-summarization",
+      "microsoft-graph",
+      "fabric-lakehouse"
+    ]
+  },
+  "triggers": [
+    {
+      "name": "ScheduledDocumentDiscovery",
+      "type": "ScheduleTrigger",
+      "typeProperties": {
+        "recurrence": {
+          "frequency": "Week",
+          "interval": 1,
+          "startTime": "2024-01-01T06:00:00Z",
+          "timeZone": "UTC",
+          "schedule": {
+            "weekDays": [
+              "Monday"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "OnDemandDocumentDiscovery",
+      "type": "BlobEventsTrigger",
+      "typeProperties": {
+        "blobPathBeginsWith": "/triggers/document-discovery/",
+        "blobPathEndsWith": ".trigger",
+        "ignoreEmptyBlobs": true,
+        "events": [
+          "Microsoft.Storage.BlobCreated"
+        ]
+      }
+    }
+  ],
+  "linkedServices": [
+    {
+      "name": "AzurePowerShellLinkedService",
+      "type": "AzureFunction",
+      "typeProperties": {
+        "functionAppUrl": "@pipeline().globalParameters.AZURE_FUNCTION_URL",
+        "authentication": "MSI",
+        "resourceId": "@pipeline().globalParameters.AZURE_FUNCTION_RESOURCE_ID"
+      }
+    },
+    {
+      "name": "FabricLakehouseLinkedService",
+      "type": "PowerBIWorkspace",
+      "typeProperties": {
+        "workspaceId": "@pipeline().globalParameters.FABRIC_WORKSPACE_ID",
+        "tenantId": "@pipeline().globalParameters.AZURE_TENANT_ID"
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "name": "WorkingDirectoryDataset",
+      "type": "Json",
+      "linkedServiceName": {
+        "referenceName": "AzureStorageLinkedService",
+        "type": "LinkedServiceReference"
+      },
+      "typeProperties": {
+        "location": {
+          "type": "AzureBlobStorageLocation",
+          "container": "pipeline-working",
+          "folderPath": "@pipeline().parameters.WorkingDirectory"
+        }
+      }
+    },
+    {
+      "name": "PipelineLogsDataset",
+      "type": "Json",
+      "linkedServiceName": {
+        "referenceName": "AzureStorageLinkedService",
+        "type": "LinkedServiceReference"
+      },
+      "typeProperties": {
+        "location": {
+          "type": "AzureBlobStorageLocation",
+          "container": "pipeline-logs",
+          "folderPath": "document-discovery/@{formatDateTime(utcnow(), 'yyyy/MM/dd')}"
+        }
+      }
+    }
+  ],
+  "dataflows": [
+    {
+      "name": "DocumentSummaryTransformation",
+      "type": "MappingDataFlow",
+      "typeProperties": {
+        "sources": [
+          {
+            "name": "SummarySource",
+            "dataset": {
+              "referenceName": "WorkingDirectoryDataset",
+              "type": "DatasetReference"
+            }
+          }
+        ],
+        "sinks": [
+          {
+            "name": "LakehouseSink",
+            "dataset": {
+              "referenceName": "FabricLakehouseDataset",
+              "type": "DatasetReference"
+            }
+          }
+        ],
+        "transformations": [
+          {
+            "name": "FlattenSummaries",
+            "type": "Flatten"
+          },
+          {
+            "name": "AddMetadata",
+            "type": "DerivedColumn"
+          },
+          {
+            "name": "FilterValidRecords",
+            "type": "Filter"
+          }
+        ],
+        "script": "source(output(\n    summaries as (document_id as string, document_name as string, source as string, last_modified as string, summary as string, key_points as string[], action_items as string[], decisions as string[], risks as string[], entities as string[], confidence_score as double)[],\n    statistics as (total_summaries as integer, successful_summaries as integer, failed_summaries as integer, average_confidence as double, processing_time_seconds as integer)\n),\n    allowSchemaDrift: true,\n    validateSchema: false) ~> SummarySource\nSummarySource foldDown(unroll(summaries),\n    mapColumn(\n        total_summaries = statistics.total_summaries,\n        successful_summaries = statistics.successful_summaries,\n        failed_summaries = statistics.failed_summaries,\n        average_confidence = statistics.average_confidence,\n        processing_time_seconds = statistics.processing_time_seconds,\n        document_id = summaries.document_id,\n        document_name = summaries.document_name,\n        source = summaries.source,\n        last_modified = summaries.last_modified,\n        summary = summaries.summary,\n        key_points = summaries.key_points,\n        action_items = summaries.action_items,\n        decisions = summaries.decisions,\n        risks = summaries.risks,\n        entities = summaries.entities,\n        confidence_score = summaries.confidence_score\n    ),\n    skipDuplicateMapInputs: false,\n    skipDuplicateMapOutputs: false) ~> FlattenSummaries\nFlattenSummaries derive(pipeline_run_id = $PipelineRunId,\n        ingestion_timestamp = currentTimestamp(),\n        partition_date = toString(currentDate()),\n        key_points_count = length(key_points),\n        action_items_count = length(action_items),\n        decisions_count = length(decisions),\n        risks_count = length(risks),\n        entities_count = length(entities),\n        has_action_items = action_items_count > 0,\n        has_decisions = decisions_count > 0,\n        has_risks = risks_count > 0,\n        last_modified_date = toDate(last_modified, 'yyyy-MM-dd'),\n        document_age_days = toInteger(divide(toLong(currentTimestamp()) - toLong(toTimestamp(last_modified)), 86400000))) ~> AddMetadata\nAddMetadata filter(not(isNull(document_id)) && not(isNull(summary)) && confidence_score >= 0.3) ~> FilterValidRecords\nFilterValidRecords sink(allowSchemaDrift: true,\n    validateSchema: false,\n    format: 'delta',\n    partitionBy('hash', 1,\n        partition_date\n    ),\n    skipDuplicateMapInputs: true,\n    skipDuplicateMapOutputs: true) ~> LakehouseSink"
+      }
+    }
+  ],
+  "globalParameters": {
+    "FABRIC_WORKSPACE_NAME": {
+      "type": "string",
+      "value": "DocumentDiscoveryWorkspace"
+    },
+    "FABRIC_LAKEHOUSE_NAME": {
+      "type": "string", 
+      "value": "DocumentAnalyticsLakehouse"
+    },
+    "FABRIC_WORKSPACE_ID": {
+      "type": "string",
+      "value": ""
+    },
+    "PURVIEW_ACCOUNT_NAME": {
+      "type": "string",
+      "value": ""
+    },
+    "TEAMS_WEBHOOK_URL": {
+      "type": "string",
+      "value": ""
+    },
+    "LOG_ANALYTICS_ENDPOINT": {
+      "type": "string",
+      "value": ""
+    },
+    "DATA_FACTORY_URL": {
+      "type": "string",
+      "value": ""
+    },
+    "AZURE_FUNCTION_URL": {
+      "type": "string",
+      "value": ""
+    },
+    "AZURE_FUNCTION_RESOURCE_ID": {
+      "type": "string",
+      "value": ""
+    },
+    "AZURE_TENANT_ID": {
+      "type": "string",
+      "value": ""
+    }
+  }
+}
