@@ -193,17 +193,72 @@ This automation framework implements **59-78+ expert-level manual steps** from o
 
 ---
 
-## 🔗 **Related Resources**
+## �️ **6. Purview Governance & DSPM for AI (NEW!)**
+
+| Microsoft Learn Documentation | Manual Steps Automated | Our Automation | Benefits |
+|------------------------------|------------------------|-----------------|----------|
+| [**Configure DSPM for AI**](https://learn.microsoft.com/en-us/purview/developer/configurepurview) | Manual tenant configuration, audit enablement, policy setup via portal | `enable_purview_dspm.ps1` | ✅ Automated DSPM enablement<br>✅ Audit activation<br>✅ Prerequisite validation |
+| [**Create DSPM policies**](https://learn.microsoft.com/en-us/purview/developer/configurepurview#create-dspm-for-ai-one-click-policies) | Manual PowerShell commands or portal clicks - requires typing commands or navigating UI for each policy | `create_dspm_policies.ps1` | ✅ **Fully automated** KYD policy<br>✅ Exchange Online connection handling<br>✅ Policy validation<br>✅ Error handling |
+| [**Enable Microsoft Purview Audit**](https://learn.microsoft.com/en-us/purview/audit-log-enable-disable) | Manual audit enablement through portal or Exchange PowerShell | Automated audit verification and guidance | ✅ Audit status validation<br>✅ Configuration checks<br>✅ Health monitoring |
+| [**Connect AI applications to DSPM**](https://learn.microsoft.com/en-us/purview/developer/secure-ai-with-purview) | Manual Azure AI Foundry integration, API implementation, tag management | `connect_dspm_to_ai_foundry.ps1` | ✅ AI project discovery<br>✅ Resource tagging<br>✅ Integration guidance |
+| [**Verify DSPM configuration**](https://learn.microsoft.com/en-us/purview/developer/testconfiguration) | Manual verification across multiple portals, policy status checks, activity monitoring | `verify_dspm_configuration.ps1` | ✅ Health assessment<br>✅ Policy validation<br>✅ Status reporting |
+
+### **Data Security Posture Management Features**
+
+**Automated DSPM Capabilities:**
+- ✅ **Tenant Validation**: M365 E5 license verification and prerequisite checks
+- ✅ **Audit Enablement**: Microsoft Purview Audit activation and verification
+- ✅ **Policy Automation**: KYD, Communication Compliance, and Insider Risk policies
+- ✅ **AI Monitoring**: Track AI prompts, responses, and sensitive data usage
+- ✅ **Risk Analytics**: Identify unethical behavior and risky AI usage patterns
+- ✅ **Compliance Reporting**: Activity Explorer and DSPM reports integration
+- ✅ **AI Foundry Integration**: Connect governance to Azure AI Foundry projects
+
+**Governance Architecture:**
+```
+Azure AI Foundry Projects
+         ↓
+    DSPM Monitoring
+         ↓
+┌────────────────────────────┐
+│  Microsoft Purview DSPM    │
+│  • KYD Policies            │
+│  • Communication Compliance│
+│  • Insider Risk Management │
+│  • Activity Tracking       │
+│  • Risk Analytics          │
+└────────────────────────────┘
+```
+
+**Key Automated Workflows:**
+1. **Enable DSPM**: Tenant configuration, audit activation, health validation
+2. **Policy Creation**: KYD policy with PowerShell, portal guidance for additional policies
+3. **AI Integration**: Discover AI Foundry projects, establish monitoring connections
+4. **Verification**: Configuration health checks, policy status, troubleshooting
+
+**Manual Steps Eliminated:**
+- ❌ **Manual portal navigation** for DSPM configuration across multiple admin centers
+- ❌ **Manual PowerShell commands** - typing `New-FeatureConfiguration` with complex JSON payloads
+- ❌ **Manual Exchange Online connection** - remembering to run `Connect-IPPSSession`
+- ❌ **Manual AI Foundry discovery** and integration setup
+- ❌ **Manual verification** across Activity Explorer, Reports, and Policies pages
+- ❌ **Manual tenant validation** for M365 E5 and prerequisite checks
+- ❌ **Manual audit enablement** through multiple admin interfaces
+
+---
+
+## �🔗 **Related Resources**
 
 - [**Repository**](https://github.com/mswantek68/fabric-purview-domain-integration): Complete source code and documentation
 - [**Azure.yaml Configuration**](./azure.yaml): Automated execution pipeline
 - [**Bicep Modules**](./infra/modules/): Infrastructure as Code templates
 - [**PowerShell Scripts**](./scripts/Fabric_Purview_Automation/): Cross-platform automation
 - [**OneLake Integration**](./scripts/OneLakeIndex/): Document processing and search
+- [**Purview Governance**](./scripts/PurviewGovernance/): DSPM for AI automation (NEW!)
 
 ---
 
 **🎉 Result**: This automation transforms **hours of manual configuration** across multiple portals into a **single deployment command** with comprehensive governance integration!
 
 *Generated: September 7, 2025*  
-*Last Updated: September 7, 2025*
+*Last Updated: October 13, 2025*

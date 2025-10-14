@@ -8,8 +8,9 @@ This solution features **dual script support** - both **PowerShell** and **Bash*
 
 This idea will be integrated into a larger deployment. Main point to keep in mind, I am using very atomic scripts to allow for endless configurations as I learn more about how to integrate source systems into Fabric (ie: Databricks, Oracle, SAP, etc.) and Purview domains. This should allow for a custom yaml file that can be adapted for each domain created.
 
-### What Gets Deployed (13 Automated Steps)
+### What Gets Deployed (13 Automated Steps + Optional Governance)
 
+#### Core Deployment (Automated via `azd up`)
 - **Microsoft Fabric Capacity**: High-performance compute capacity for Fabric workloads and separation
 - **Fabric Workspace**: Collaborative workspace for data engineering and analytics
 - **Fabric Domain**: Organized data domain structure (governance-focused)
@@ -21,6 +22,12 @@ This idea will be integrated into a larger deployment. Main point to keep in min
 - **🆕 OneLake Indexer**: Automated indexer connecting AI Search to Fabric lakehouse data using preview API
 - **🆕 Document Processing**: Intelligent document extraction and search from bronze lakehouse
 - **🆕 RBAC Automation**: Seamless managed identity permissions between AI Search and Fabric workspace
+
+#### Optional Governance Features (scripts/PurviewGovernance/)
+- **🆕 DSPM for AI**: Data Security Posture Management for AI applications and models
+- **🆕 AI Governance Policies**: KYD, Communication Compliance, and Insider Risk policies
+- **🆕 AI Foundry Integration**: Connect DSPM monitoring to Azure AI Foundry projects
+- **🆕 Compliance Monitoring**: Activity tracking, risk analytics, and audit logging for AI
 
 ## 🏗️ Enhanced Architecture
 
@@ -362,7 +369,121 @@ The solution includes **enhanced RBAC scripts** that:
 - ✅ Provide detailed error reporting and recovery guidance
 - ✅ Support cross-platform execution (PowerShell Core)
 
-## 📊 Automation Impact Analysis
+## �️ Purview Governance & DSPM for AI (NEW!)
+
+### Data Security Posture Management for AI
+
+The solution now includes **Microsoft Purview DSPM for AI** capabilities for comprehensive AI governance:
+
+#### Key Features
+- 🔒 **DSPM for AI**: Monitor AI activity, enforce security policies, prevent data exposure
+- 🤖 **AI Foundry Integration**: Connect DSPM to Azure AI Foundry projects for integrated governance
+- 📊 **Activity Monitoring**: Track AI prompts, responses, and sensitive data usage
+- 🚨 **Risk Analytics**: Identify risky AI usage patterns and unethical behavior
+- 📝 **Audit Logging**: Comprehensive audit trail for all AI interactions
+- 🎯 **Policy Automation**: One-click policies for data protection and compliance
+
+#### Governance Scripts (scripts/PurviewGovernance/)
+
+1. **`enable_purview_dspm.ps1`**
+   - Enables Microsoft Purview DSPM for AI
+   - Activates Microsoft Purview Audit
+   - Validates tenant prerequisites (M365 E5)
+   - Provides configuration status
+
+2. **`create_dspm_policies.ps1`**
+   - Creates KYD (Know Your Data) policy
+   - Sets up Communication Compliance policies
+   - Configures Insider Risk Management
+   - Enables sensitive data detection
+
+3. **`connect_dspm_to_ai_foundry.ps1`**
+   - Discovers AI Foundry projects
+   - Establishes DSPM monitoring connections
+   - Configures governance policies
+   - Tags resources for compliance tracking
+
+4. **`verify_dspm_configuration.ps1`**
+   - Validates configuration health
+   - Checks policy status
+   - Verifies data collection
+   - Provides troubleshooting guidance
+
+#### Quick Start - Governance & Security Setup
+
+**Option 1: Automated via azd (Recommended)**
+```bash
+# Runs automatically during azd up post-provisioning hooks
+azd up
+```
+
+**Option 2: Standalone Orchestrator**
+```bash
+# Run all governance and security scripts in correct order
+pwsh scripts/run_governance_and_security.ps1
+
+# Run only Purview DSPM scripts
+pwsh scripts/run_governance_and_security.ps1 -SkipDefender
+
+# Run only Defender for AI scripts
+pwsh scripts/run_governance_and_security.ps1 -SkipPurview
+```
+
+**Option 3: Manual Execution (Granular Control)**
+```bash
+# Phase 1: Purview DSPM for AI
+pwsh scripts/PurviewGovernance/enable_purview_dspm.ps1
+pwsh scripts/PurviewGovernance/create_dspm_policies.ps1
+pwsh scripts/PurviewGovernance/connect_dspm_to_ai_foundry.ps1
+pwsh scripts/PurviewGovernance/verify_dspm_configuration.ps1
+
+# Phase 2: Microsoft Defender for AI
+pwsh scripts/DefenderScripts/enable_defender_for_cloud.ps1
+pwsh scripts/DefenderScripts/enable_defender_for_ai.ps1
+pwsh scripts/DefenderScripts/enable_user_prompt_evidence.ps1
+pwsh scripts/DefenderScripts/connect_defender_to_purview.ps1
+pwsh scripts/DefenderScripts/verify_defender_ai_configuration.ps1
+```
+
+#### Prerequisites
+- **Microsoft 365 E5 license**
+- **Admin Roles**: Microsoft Entra Compliance Admin, Global Admin, or Purview Compliance Admin
+- **Exchange Online Management module**: For policy creation
+- **PowerShell 7+**: Cross-platform support
+
+#### Monitoring & Compliance
+After configuration, access your governance dashboard:
+- **DSPM Portal**: https://purview.microsoft.com/purviewforai/overview
+- **Activity Explorer**: Track AI interactions and sensitive data
+- **Reports**: View AI security analytics and compliance metrics
+- **Policies**: Monitor policy status and violations
+
+#### Architecture Integration
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Azure AI Foundry                         │
+│  ┌────────────────┐    ┌────────────────┐                   │
+│  │  AI Projects   │    │   AI Models    │                   │
+│  │  & Workspaces  │────│   & Prompts    │                   │
+│  └────────────────┘    └────────────────┘                   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                    Data Governance & Security
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│           Microsoft Purview DSPM for AI                     │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
+│  │    KYD      │  │   Audit     │  │  Risk Analytics     │ │
+│  │  Policies   │  │   Logs      │  │  & Compliance       │ │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+For detailed documentation, see [scripts/PurviewGovernance/README.md](scripts/PurviewGovernance/README.md)
+
+## �📊 Automation Impact Analysis
 
 ### Manual Steps Eliminated: 59-78+ Steps → Single Command
 
