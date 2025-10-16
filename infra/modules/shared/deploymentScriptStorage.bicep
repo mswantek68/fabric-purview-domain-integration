@@ -25,6 +25,7 @@ module storageAccount 'br/public:avm/res/storage/storage-account:0.27.1' = {
     skuName: 'Standard_LRS'
     allowBlobPublicAccess: false
     publicNetworkAccess: 'Enabled'
+    allowSharedKeyAccess: true  // Required for deployment scripts
     networkAcls: {
       bypass: 'AzureServices'
       defaultAction: 'Allow'
