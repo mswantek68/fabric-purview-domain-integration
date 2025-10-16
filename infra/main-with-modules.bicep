@@ -172,23 +172,14 @@ module managedIdentity './modules/shared/managedIdentity.bicep' = {
 }
 
 // ============================================================================
-// STEP 3: RBAC ASSIGNMENTS (Add as needed for your environment)
+// STEP 3: AUTOMATED RBAC ASSIGNMENTS
 // ============================================================================
-
-// Note: In production, you'll need to assign:
-// - Fabric Administrator role to managedIdentity
-// - Purview Data Curator role to managedIdentity
-// - Any other necessary roles for your environment
-// 
-// Example (requires role definition IDs):
-// resource fabricAdminRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-//   name: guid(resourceGroup().id, managedIdentity.outputs.managedIdentityId, 'FabricAdmin')
-//   properties: {
-//     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '<fabric-admin-role-id>')
-//     principalId: managedIdentity.properties.principalId
-//     principalType: 'ServicePrincipal'
-//   }
-// }
+// These modules automatically assign Fabric and Purview roles via REST APIs.
+// They run AFTER storage account is created so they can use it for execution.
+// If API calls fail, they provide clear manual instructions.
+//
+// Note: Storage RBAC (Storage File Data Privileged Contributor) is automatically
+// assigned by the AVM storage account module in STEP 4.
 
 // ============================================================================
 // STEP 4: DEPLOY SHARED STORAGE ACCOUNT (for all deployment scripts)
@@ -208,7 +199,48 @@ module sharedStorage './modules/shared/deploymentScriptStorage.bicep' = {
 }
 
 // ============================================================================
-// STEP 5: CREATE FABRIC DOMAIN
+// STEP 5A: ASSIGN FABRIC ADMINISTRATOR ROLE (Automated via API)
+// ============================================================================
+// This module uses the Fabric REST API to automatically assign the Fabric
+// Administrator role to the managed identity for capacity operations.
+// If the API call fails, it provides manual instructions.
+
+module fabricRoles './modules/shared/assignFabricRoles.bicep' = {
+  name: 'assign-fabric-roles-${uniqueString(resourceGroup().id)}'
+  params: {
+    userAssignedIdentityId: managedIdentity.outputs.managedIdentityId
+    managedIdentityPrincipalId: managedIdentity.outputs.managedIdentityPrincipalId
+    fabricCapacityId: capacity.outputs.resourceId
+    storageAccountName: sharedStorage.outputs.storageAccountName
+    location: location
+    tags: tags
+    utcValue: utcValue
+  }
+}
+
+// ============================================================================
+// STEP 5B: ASSIGN PURVIEW ROLES (Automated via API)
+// ============================================================================
+// This module uses the Purview REST API to automatically assign Collection Admin,
+// Data Source Administrator, and Data Curator roles to the managed identity.
+// If the API call fails, it provides manual instructions.
+
+module purviewRoles './modules/shared/assignPurviewRoles.bicep' = {
+  name: 'assign-purview-roles-${uniqueString(resourceGroup().id)}'
+  params: {
+    userAssignedIdentityId: managedIdentity.outputs.managedIdentityId
+    managedIdentityPrincipalId: managedIdentity.outputs.managedIdentityPrincipalId
+    purviewAccountName: purviewAccountName
+    purviewCollectionName: purviewDataMapDomainName
+    storageAccountName: sharedStorage.outputs.storageAccountName
+    location: location
+    tags: tags
+    utcValue: utcValue
+  }
+}
+
+// ============================================================================
+// STEP 6: CREATE FABRIC DOMAIN
 // ============================================================================
 
 module fabricDomain './modules/fabric/fabricDomain.bicep' = {
@@ -288,11 +320,6 @@ module assignWorkspacesToDomain './modules/fabric/assignWorkspaceToDomain.bicep'
     tags: tags
     utcValue: utcValue
   }
-  dependsOn: [
-    fabricDomain      // Domain must exist
-    fabricWorkspace   // Workspace must be attached to capacity
-    ensureCapacity    // Capacity must be active
-  ]
 }
 
 // ============================================================================
@@ -311,9 +338,6 @@ module lakehouses './modules/fabric/createLakehouses.bicep' = {
     tags: tags
     utcValue: utcValue
   }
-  dependsOn: [
-    assignWorkspacesToDomain  // Workspace must be fully configured (attached to capacity and domain)
-  ]
 }
 
 // ============================================================================
@@ -331,9 +355,6 @@ module purviewCollection './modules/purview/createPurviewCollection.bicep' = {
     tags: tags
     utcValue: utcValue
   }
-  dependsOn: [
-    lakehouses
-  ]
 }
 
 // ============================================================================
@@ -353,9 +374,6 @@ module registerDatasource './modules/purview/registerFabricDatasource.bicep' = {
     tags: tags
     utcValue: utcValue
   }
-  dependsOn: [
-    purviewCollection
-  ]
 }
 
 // ============================================================================
@@ -376,9 +394,6 @@ module triggerScan './modules/purview/triggerPurviewScan.bicep' = if (enablePurv
     tags: tags
     utcValue: utcValue
   }
-  dependsOn: [
-    registerDatasource
-  ]
 }
 
 // ============================================================================
