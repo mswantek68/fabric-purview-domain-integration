@@ -119,7 +119,7 @@ resource fabricCapacity 'Microsoft.Fabric/capacities@2023-11-01' = {
 // STEP 1: ENSURE CAPACITY IS ACTIVE
 // ============================================================================
 
-module ensureCapacity '../modules/ensureActiveCapacity.bicep' = {
+module ensureCapacity '../modules/fabric/ensureActiveCapacity.bicep' = {
   name: 'ensure-capacity-${utcValue}'
   params: {
     fabricCapacityId: fabricCapacity.id
@@ -140,7 +140,7 @@ module ensureCapacity '../modules/ensureActiveCapacity.bicep' = {
 // STEP 2: CREATE FABRIC DOMAIN
 // ============================================================================
 
-module fabricDomain '../modules/fabricDomain.bicep' = {
+module fabricDomain '../modules/fabric/fabricDomain.bicep' = {
   name: 'create-domain-${utcValue}'
   params: {
     domainName: domainName
@@ -158,7 +158,7 @@ module fabricDomain '../modules/fabricDomain.bicep' = {
 // STEP 3: CREATE FABRIC WORKSPACE
 // ============================================================================
 
-module fabricWorkspace '../modules/fabricWorkspace.bicep' = {
+module fabricWorkspace '../modules/fabric/fabricWorkspace.bicep' = {
   name: 'create-workspace-${utcValue}'
   params: {
     workspaceName: workspaceName
@@ -178,7 +178,7 @@ module fabricWorkspace '../modules/fabricWorkspace.bicep' = {
 // STEP 4: CREATE LAKEHOUSES
 // ============================================================================
 
-module lakehouses '../modules/createLakehouses.bicep' = {
+module lakehouses '../modules/fabric/createLakehouses.bicep' = {
   name: 'create-lakehouses-${utcValue}'
   params: {
     workspaceName: fabricWorkspace.outputs.workspaceName
@@ -198,7 +198,7 @@ module lakehouses '../modules/createLakehouses.bicep' = {
 // STEP 5: ASSIGN WORKSPACE TO DOMAIN
 // ============================================================================
 
-module assignDomain '../modules/assignWorkspaceToDomain.bicep' = {
+module assignDomain '../modules/fabric/assignWorkspaceToDomain.bicep' = {
   name: 'assign-domain-${utcValue}'
   params: {
     workspaceName: fabricWorkspace.outputs.workspaceName
@@ -221,7 +221,7 @@ module assignDomain '../modules/assignWorkspaceToDomain.bicep' = {
 // ============================================================================
 
 // Step 6: Create Purview Collection
-module purviewCollection '../modules/createPurviewCollection.bicep' = if (enablePurview) {
+module purviewCollection '../modules/purview/createPurviewCollection.bicep' = if (enablePurview) {
   name: 'create-collection-${utcValue}'
   params: {
     purviewAccountName: purviewAccountName
@@ -237,7 +237,7 @@ module purviewCollection '../modules/createPurviewCollection.bicep' = if (enable
 }
 
 // Step 7: Register Fabric Datasource
-module registerDatasource '../modules/registerFabricDatasource.bicep' = if (enablePurview) {
+module registerDatasource '../modules/purview/registerFabricDatasource.bicep' = if (enablePurview) {
   name: 'register-datasource-${utcValue}'
   params: {
     purviewAccountName: purviewAccountName
@@ -256,7 +256,7 @@ module registerDatasource '../modules/registerFabricDatasource.bicep' = if (enab
 }
 
 // Step 8: Trigger Purview Scan
-module triggerScan '../modules/triggerPurviewScan.bicep' = if (enablePurview) {
+module triggerScan '../modules/purview/triggerPurviewScan.bicep' = if (enablePurview) {
   name: 'trigger-scan-${utcValue}'
   params: {
     purviewAccountName: purviewAccountName
@@ -279,7 +279,7 @@ module triggerScan '../modules/triggerPurviewScan.bicep' = if (enablePurview) {
 // LOG ANALYTICS INTEGRATION (OPTIONAL/PLACEHOLDER)
 // ============================================================================
 
-module connectLogAnalytics '../modules/connectLogAnalytics.bicep' = if (enableLogAnalytics) {
+module connectLogAnalytics '../modules/monitoring/connectLogAnalytics.bicep' = if (enableLogAnalytics) {
   name: 'connect-log-analytics-${utcValue}'
   params: {
     workspaceName: fabricWorkspace.outputs.workspaceName

@@ -33,7 +33,7 @@ resource fabricManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities
 }
 
 // Deploy Fabric domain first
-module fabricDomain '../modules/fabricDomain.bicep' = {
+module fabricDomain '../modules/fabric/fabricDomain.bicep' = {
   name: 'deploy-fabric-domain'
   params: {
     domainName: domainName
@@ -44,7 +44,7 @@ module fabricDomain '../modules/fabricDomain.bicep' = {
 }
 
 // Deploy Fabric workspace (depends on domain)
-module fabricWorkspace '../modules/fabricWorkspace.bicep' = {
+module fabricWorkspace '../modules/fabric/fabricWorkspace.bicep' = {
   name: 'deploy-fabric-workspace'
   params: {
     workspaceName: workspaceName

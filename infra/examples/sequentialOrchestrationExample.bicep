@@ -81,7 +81,7 @@ resource contributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
 // WAITS FOR: Role assignment to complete (needs permissions)
 // ============================================================================
 
-module phase1_EnsureCapacity '../modules/ensureActiveCapacity.bicep' = {
+module phase1_EnsureCapacity '../modules/fabric/ensureActiveCapacity.bicep' = {
   name: 'phase1-ensure-capacity-${utcValue}'
   params: {
     fabricCapacityId: fabricCapacity.id
@@ -105,7 +105,7 @@ module phase1_EnsureCapacity '../modules/ensureActiveCapacity.bicep' = {
 // PARALLEL WITH: Workspace creation (they don't depend on each other)
 // ============================================================================
 
-module phase2a_CreateDomain '../modules/fabricDomain.bicep' = {
+module phase2a_CreateDomain '../modules/fabric/fabricDomain.bicep' = {
   name: 'phase2a-create-domain-${utcValue}'
   params: {
     domainName: domainName
@@ -126,7 +126,7 @@ module phase2a_CreateDomain '../modules/fabricDomain.bicep' = {
 // PARALLEL WITH: Domain creation (they don't depend on each other)
 // ============================================================================
 
-module phase2b_CreateWorkspace '../modules/fabricWorkspace.bicep' = {
+module phase2b_CreateWorkspace '../modules/fabric/fabricWorkspace.bicep' = {
   name: 'phase2b-create-workspace-${utcValue}'
   params: {
     workspaceName: workspaceName
@@ -149,7 +149,7 @@ module phase2b_CreateWorkspace '../modules/fabricWorkspace.bicep' = {
 // IMPLICIT DEPENDENCY: Uses workspace.outputs.workspaceId
 // ============================================================================
 
-module phase3_CreateLakehouses '../modules/createLakehouses.bicep' = {
+module phase3_CreateLakehouses '../modules/fabric/createLakehouses.bicep' = {
   name: 'phase3-create-lakehouses-${utcValue}'
   params: {
     // IMPLICIT DEPENDENCIES: Using outputs automatically creates wait condition
@@ -171,7 +171,7 @@ module phase3_CreateLakehouses '../modules/createLakehouses.bicep' = {
 // COMBINES: Implicit dependencies (outputs) + explicit (lakehouses)
 // ============================================================================
 
-module phase4_AssignDomain '../modules/assignWorkspaceToDomain.bicep' = {
+module phase4_AssignDomain '../modules/fabric/assignWorkspaceToDomain.bicep' = {
   name: 'phase4-assign-domain-${utcValue}'
   params: {
     // IMPLICIT DEPENDENCIES: Using outputs from previous phases
@@ -195,7 +195,7 @@ module phase4_AssignDomain '../modules/assignWorkspaceToDomain.bicep' = {
 // IMPLICIT DEPENDENCY: Uses domain.outputs.domainName
 // ============================================================================
 
-module phase5a_CreatePurviewCollection '../modules/createPurviewCollection.bicep' = if (enablePurview) {
+module phase5a_CreatePurviewCollection '../modules/purview/createPurviewCollection.bicep' = if (enablePurview) {
   name: 'phase5a-create-collection-${utcValue}'
   params: {
     purviewAccountName: purviewAccountName
@@ -216,7 +216,7 @@ module phase5a_CreatePurviewCollection '../modules/createPurviewCollection.bicep
 // COMBINES: Multiple implicit dependencies from outputs
 // ============================================================================
 
-module phase5b_RegisterDatasource '../modules/registerFabricDatasource.bicep' = if (enablePurview) {
+module phase5b_RegisterDatasource '../modules/purview/registerFabricDatasource.bicep' = if (enablePurview) {
   name: 'phase5b-register-datasource-${utcValue}'
   params: {
     purviewAccountName: purviewAccountName
@@ -242,7 +242,7 @@ module phase5b_RegisterDatasource '../modules/registerFabricDatasource.bicep' = 
 // IMPLICIT DEPENDENCY: Uses datasource output
 // ============================================================================
 
-module phase5c_TriggerScan '../modules/triggerPurviewScan.bicep' = if (enablePurview) {
+module phase5c_TriggerScan '../modules/purview/triggerPurviewScan.bicep' = if (enablePurview) {
   name: 'phase5c-trigger-scan-${utcValue}'
   params: {
     purviewAccountName: purviewAccountName

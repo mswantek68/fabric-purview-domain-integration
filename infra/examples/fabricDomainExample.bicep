@@ -20,7 +20,7 @@ resource fabricManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities
 }
 
 // Deploy Fabric domain using the module
-module fabricDomain '../modules/fabricDomain.bicep' = {
+module fabricDomain '../modules/fabric/fabricDomain.bicep' = {
   name: 'deploy-${domainName}'
   params: {
     domainName: domainName

@@ -24,7 +24,7 @@ resource fabricManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities
 var capacityId = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroup().name}/providers/Microsoft.Fabric/capacities/fabric-capacity-${environmentName}'
 
 // Deploy Fabric workspace using the module
-module fabricWorkspace '../modules/fabricWorkspace.bicep' = {
+module fabricWorkspace '../modules/fabric/fabricWorkspace.bicep' = {
   name: 'deploy-${workspaceName}'
   params: {
     workspaceName: workspaceName
