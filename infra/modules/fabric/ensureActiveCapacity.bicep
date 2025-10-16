@@ -42,6 +42,7 @@ resource ensureCapacityDeploymentScript 'Microsoft.Resources/deploymentScripts@2
     timeout: 'PT30M'
     cleanupPreference: 'OnSuccess'
     storageAccountSettings: {
+      storageAccountKey: null
       storageAccountName: storageAccountName
     }
     environmentVariables: [

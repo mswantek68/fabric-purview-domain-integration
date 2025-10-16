@@ -39,6 +39,7 @@ resource triggerPurviewScanDeploymentScript 'Microsoft.Resources/deploymentScrip
     timeout: 'PT1H'
     cleanupPreference: 'OnSuccess'
     storageAccountSettings: {
+      storageAccountKey: null
       storageAccountName: storageAccountName
     }
     environmentVariables: [

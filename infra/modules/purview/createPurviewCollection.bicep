@@ -36,6 +36,7 @@ resource createPurviewCollectionDeploymentScript 'Microsoft.Resources/deployment
     timeout: 'PT30M'
     cleanupPreference: 'OnSuccess'
     storageAccountSettings: {
+      storageAccountKey: null
       storageAccountName: storageAccountName
     }
     environmentVariables: [

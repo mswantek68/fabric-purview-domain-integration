@@ -37,6 +37,7 @@ resource fabricWorkspaceDeploymentScript 'Microsoft.Resources/deploymentScripts@
     timeout: 'PT30M'
     cleanupPreference: 'OnSuccess'
     storageAccountSettings: {
+      storageAccountKey: null
       storageAccountName: storageAccountName
     }
     environmentVariables: [

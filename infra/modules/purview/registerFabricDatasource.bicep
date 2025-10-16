@@ -39,6 +39,7 @@ resource registerFabricDatasourceDeploymentScript 'Microsoft.Resources/deploymen
     timeout: 'PT30M'
     cleanupPreference: 'OnSuccess'
     storageAccountSettings: {
+      storageAccountKey: null
       storageAccountName: storageAccountName
     }
     environmentVariables: [

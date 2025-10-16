@@ -37,6 +37,7 @@ resource connectLogAnalyticsDeploymentScript 'Microsoft.Resources/deploymentScri
     timeout: 'PT30M'
     cleanupPreference: 'OnSuccess'
     storageAccountSettings: {
+      storageAccountKey: null
       storageAccountName: storageAccountName
     }
     environmentVariables: [

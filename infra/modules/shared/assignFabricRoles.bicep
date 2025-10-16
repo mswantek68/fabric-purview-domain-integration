@@ -49,6 +49,7 @@ resource assignFabricRolesScript 'Microsoft.Resources/deploymentScripts@2023-08-
     timeout: 'PT10M'
     cleanupPreference: 'OnSuccess'
     storageAccountSettings: {
+      storageAccountKey: null
       storageAccountName: storageAccountName
     }
     environmentVariables: [

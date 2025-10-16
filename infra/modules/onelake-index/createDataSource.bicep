@@ -62,6 +62,7 @@ resource createDataSourceScript 'Microsoft.Resources/deploymentScripts@2023-08-0
     timeout: 'PT30M'
     forceUpdateTag: timestamp
     storageAccountSettings: {
+      storageAccountKey: null
       storageAccountName: storageAccountName
     }
     environmentVariables: [

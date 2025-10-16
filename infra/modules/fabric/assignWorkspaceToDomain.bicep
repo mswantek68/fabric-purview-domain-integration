@@ -37,6 +37,7 @@ resource assignDomainDeploymentScript 'Microsoft.Resources/deploymentScripts@202
     timeout: 'PT30M'
     cleanupPreference: 'OnSuccess'
     storageAccountSettings: {
+      storageAccountKey: null
       storageAccountName: storageAccountName
     }
     environmentVariables: [

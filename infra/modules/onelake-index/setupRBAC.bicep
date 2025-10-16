@@ -53,6 +53,7 @@ resource setupRBACScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
     timeout: 'PT30M'
     forceUpdateTag: timestamp
     storageAccountSettings: {
+      storageAccountKey: null
       storageAccountName: storageAccountName
     }
     environmentVariables: [
