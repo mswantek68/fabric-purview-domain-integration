@@ -11,11 +11,15 @@ Deployment Order:
 2. Managed Identity (for deployment scripts)
 3. RBAC role assignments
 4. Shared Storage Account (for all deployment scripts)
-5. Fabric Domain creation
-6. Fabric Workspace creation
-7. Assign Workspace to Domain
-8. Ensure Capacity is Active
-9. Create Lakehouses (bronze, silver, gold)
+4. Fabric Domain creation
+   ↓
+5. Fabric Workspace creation + Attach to Capacity (atomic operation)
+   ↓
+6. Ensure Capacity is Active (required before domain assignment)
+   ↓
+7. Assign Workspaces (by Capacity) to Domain (bulk operation)
+   ↓
+8. Create Lakehouses (bronze, silver, gold)
 10. Purview Collection creation
 11. Register Fabric as Purview datasource
 12. Trigger Purview scan (optional)
@@ -209,8 +213,11 @@ module fabricDomain './modules/fabric/fabricDomain.bicep' = {
 }
 
 // ============================================================================
-// STEP 6: CREATE FABRIC WORKSPACE
+// STEP 6: CREATE FABRIC WORKSPACE AND ATTACH TO CAPACITY
 // ============================================================================
+// This module performs TWO atomic operations:
+//   1. Creates the Fabric workspace
+//   2. Attaches the workspace to the specified capacity
 
 module fabricWorkspace './modules/fabric/fabricWorkspace.bicep' = {
   name: 'fabric-workspace-${uniqueString(resourceGroup().id)}'
@@ -226,29 +233,10 @@ module fabricWorkspace './modules/fabric/fabricWorkspace.bicep' = {
 }
 
 // ============================================================================
-// STEP 7: ASSIGN WORKSPACE TO DOMAIN
+// STEP 7: ENSURE CAPACITY IS ACTIVE
 // ============================================================================
-
-module assignWorkspace './modules/fabric/assignWorkspaceToDomain.bicep' = {
-  name: 'assign-workspace-${uniqueString(resourceGroup().id)}'
-  params: {
-    workspaceName: fabricWorkspaceName
-    domainName: domainName
-    capacityId: capacity.outputs.resourceId
-    userAssignedIdentityId: managedIdentity.id
-    storageAccountName: sharedStorage.outputs.storageAccountName
-    location: location
-    tags: tags
-    utcValue: utcValue
-  }
-  dependsOn: [
-    fabricDomain
-  ]
-}
-
-// ============================================================================
-// STEP 8: ENSURE CAPACITY IS ACTIVE
-// ============================================================================
+// IMPORTANT: This must run BEFORE assigning workspace to domain because the
+// domain assignment API requires the capacity to be active and accessible.
 
 module ensureCapacity './modules/fabric/ensureActiveCapacity.bicep' = {
   name: 'ensure-capacity-${uniqueString(resourceGroup().id)}'
@@ -261,6 +249,39 @@ module ensureCapacity './modules/fabric/ensureActiveCapacity.bicep' = {
     tags: tags
     utcValue: utcValue
   }
+}
+
+// ============================================================================
+// STEP 8: ASSIGN WORKSPACES (BY CAPACITY) TO DOMAIN
+// ============================================================================
+// This module assigns ALL workspaces on the specified capacity to the domain.
+// It's a BULK operation that works at the capacity level, not individual workspace level.
+// 
+// Prerequisites:
+//   - Workspace must already be attached to capacity (done in step 6)
+//   - Capacity must be active (ensured in step 7)
+//   - Domain must exist (created in step 5)
+//
+// Note: This uses the Fabric Admin API endpoint:
+//   POST /admin/domains/{domainId}/assignWorkspacesByCapacities
+
+module assignWorkspacesToDomain './modules/fabric/assignWorkspaceToDomain.bicep' = {
+  name: 'assign-workspaces-to-domain-${uniqueString(resourceGroup().id)}'
+  params: {
+    workspaceName: fabricWorkspaceName
+    domainName: domainName
+    capacityId: capacity.outputs.resourceId
+    userAssignedIdentityId: managedIdentity.id
+    storageAccountName: sharedStorage.outputs.storageAccountName
+    location: location
+    tags: tags
+    utcValue: utcValue
+  }
+  dependsOn: [
+    fabricDomain      // Domain must exist
+    fabricWorkspace   // Workspace must be attached to capacity
+    ensureCapacity    // Capacity must be active
+  ]
 }
 
 // ============================================================================
@@ -280,7 +301,7 @@ module lakehouses './modules/fabric/createLakehouses.bicep' = {
     utcValue: utcValue
   }
   dependsOn: [
-    ensureCapacity
+    assignWorkspacesToDomain  // Workspace must be fully configured (attached to capacity and domain)
   ]
 }
 
