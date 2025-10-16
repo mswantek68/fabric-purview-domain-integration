@@ -19,8 +19,6 @@ param aiFoundryName string
 @description('Name of the Fabric workspace')
 param fabricWorkspaceName string
 
-@description('Name of the shared storage account for deployment scripts')
-param storageAccountName string
 
 
 @description('User-assigned managed identity ID for authentication')
@@ -52,10 +50,6 @@ resource setupRBACScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
     retentionInterval: 'P1D'
     timeout: 'PT30M'
     forceUpdateTag: timestamp
-    storageAccountSettings: {
-      storageAccountKey: null
-      storageAccountName: storageAccountName
-    }
     environmentVariables: [
       {
         name: 'AI_SEARCH_NAME'

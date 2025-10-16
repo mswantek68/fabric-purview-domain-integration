@@ -20,9 +20,6 @@ param purviewAccountName string
 @description('Purview collection name (empty for root collection)')
 param purviewCollectionName string = ''
 
-@description('Storage account name for deployment script')
-param storageAccountName string
-
 @description('Location for deployment')
 param location string = resourceGroup().location
 
@@ -51,10 +48,6 @@ resource assignPurviewRolesScript 'Microsoft.Resources/deploymentScripts@2023-08
     retentionInterval: 'P1D'
     timeout: 'PT10M'
     cleanupPreference: 'OnSuccess'
-    storageAccountSettings: {
-      storageAccountKey: null
-      storageAccountName: storageAccountName
-    }
     environmentVariables: [
       {
         name: 'MANAGED_IDENTITY_PRINCIPAL_ID'

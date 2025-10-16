@@ -28,8 +28,6 @@ param workspaceName string = ''
 @description('Query path within the lakehouse')
 param queryPath string = 'Files/documents/reports'
 
-@description('Name of the shared storage account for deployment scripts')
-param storageAccountName string
 
 
 @description('User-assigned managed identity ID for authentication')
@@ -61,10 +59,6 @@ resource createDataSourceScript 'Microsoft.Resources/deploymentScripts@2023-08-0
     retentionInterval: 'P1D'
     timeout: 'PT30M'
     forceUpdateTag: timestamp
-    storageAccountSettings: {
-      storageAccountKey: null
-      storageAccountName: storageAccountName
-    }
     environmentVariables: [
       {
         name: 'aiSearchName'

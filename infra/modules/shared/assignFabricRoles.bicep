@@ -17,9 +17,6 @@ param managedIdentityPrincipalId string
 @description('Fabric Capacity ID to grant admin access')
 param fabricCapacityId string
 
-@description('Storage account name for deployment script')
-param storageAccountName string
-
 @description('Location for deployment')
 param location string = resourceGroup().location
 
@@ -48,10 +45,6 @@ resource assignFabricRolesScript 'Microsoft.Resources/deploymentScripts@2023-08-
     retentionInterval: 'P1D'
     timeout: 'PT10M'
     cleanupPreference: 'OnSuccess'
-    storageAccountSettings: {
-      storageAccountKey: null
-      storageAccountName: storageAccountName
-    }
     environmentVariables: [
       {
         name: 'MANAGED_IDENTITY_PRINCIPAL_ID'
