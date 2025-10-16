@@ -1,86 +1,75 @@
-# OneLake Index Modules
+# OneLake Index Bicep Modules
 
-_Status: Planned / Future Development_
+This folder contains Bicep modules for setting up Azure AI Search indexing of Microsoft Fabric OneLake data.
 
-This folder will contain Bicep deployment script modules for Azure AI Search OneLake indexing operations. These modules will wrap the PowerShell scripts currently located in `scripts/OneLakeIndex/`.
+## Module Overview
 
-## Planned Modules
+| Module | Description | PowerShell Script |
+|--------|-------------|-------------------|
+| `setupRBAC.bicep` | Configures RBAC permissions for AI Search managed identity to access OneLake and AI Foundry | `01_setup_rbac.ps1` |
+| `createSkillsets.bicep` | Creates AI Search skillsets for document processing (text extraction, chunking) | `02_create_onelake_skillsets.ps1` |
+| `createIndex.bicep` | Creates the search index schema for OneLake documents | `03_create_onelake_index.ps1` |
+| `createDataSource.bicep` | Creates the OneLake data source connection to Fabric lakehouse | `04_create_onelake_datasource.ps1` |
+| `createIndexer.bicep` | Creates and runs the indexer to process OneLake documents | `05_create_onelake_indexer.ps1` |
 
-The following modules are planned to automate OneLake indexing with Azure AI Search:
+## Execution Order
 
-1. **setupSearchRbac.bicep** - Setup RBAC permissions for Azure AI Search on OneLake
-2. **createOneLakeSkillsets.bicep** - Create AI skillsets for OneLake data processing
-3. **createOneLakeIndex.bicep** - Create the search index schema for OneLake
-4. **createOneLakeDatasource.bicep** - Register OneLake as a datasource
-5. **createOneLakeIndexer.bicep** - Create and configure the OneLake indexer
-6. **setupAIFoundrySearchRbac.bicep** - Setup RBAC for AI Foundry integration
-7. **automateAIFoundryConnection.bicep** - Automate AI Foundry search connection
+These modules must be deployed in sequence:
 
-## Current State
+1. **setupRBAC** - Configure permissions first
+2. **createSkillsets** - Define how documents are processed
+3. **createIndex** - Create the search index schema
+4. **createDataSource** - Connect to the Fabric lakehouse
+5. **createIndexer** - Start indexing documents
 
-Currently, these operations are automated via PowerShell scripts in `scripts/OneLakeIndex/`. To use these capabilities today:
+## Shared Storage Account
 
-```bash
-# Run PowerShell scripts in sequence
-./scripts/OneLakeIndex/01_setup_rbac.ps1
-./scripts/OneLakeIndex/02_create_onelake_skillsets.ps1
-./scripts/OneLakeIndex/03_create_onelake_index.ps1
-./scripts/OneLakeIndex/04_create_onelake_datasource.ps1
-./scripts/OneLakeIndex/05_create_onelake_indexer.ps1
-./scripts/OneLakeIndex/06_setup_ai_foundry_search_rbac.ps1
-./scripts/OneLakeIndex/07_automate_ai_foundry_connection.ps1
-```
+All OneLake Index modules use a **shared storage account** for deployment scripts. This storage account is created once (typically with the first Fabric module) and passed as a parameter to all subsequent modules.
 
-See `scripts/OneLakeIndex/README.md` for detailed documentation.
+### Benefits of Shared Storage Account:
+- **Cost Reduction**: Single storage account instead of 5+ separate accounts
+- **Simplified Management**: One resource to monitor and maintain
+- **Consistent Configuration**: Same settings across all deployment scripts
 
-## Future Design
+## Prerequisites
 
-When implemented, these modules will follow the same patterns as other modules:
+### Azure Resources Required:
+- **AI Search Service** with system-assigned managed identity enabled
+- **AI Foundry Workspace** 
+- **Fabric Workspace** with lakehouse
+- **User-Assigned Managed Identity** with:
+  - Fabric Admin role
+  - Power BI Service Admin role
+  - Storage Blob Data Reader role
 
-- **Idempotent operations** - Safe to run multiple times
-- **Deployment script wrappers** - Each module wraps atomic operations
-- **Output chaining** - Modules expose outputs for dependency management
-- **Consistent parameters** - userAssignedIdentityId, location, tags, etc.
+### RBAC Permissions:
+The AI Search managed identity needs:
+- OneLake data access role in Fabric workspace
+- Search Service Contributor role
+- Storage Blob Data Reader role
 
-Example future usage:
+## Troubleshooting
 
-```bicep
-module searchRbac 'modules/onelake-index/setupSearchRbac.bicep' = {
-  name: 'setup-search-rbac'
-  params: {
-    searchServiceName: 'mySearchService'
-    storageAccountName: 'onelakestorage'
-    userAssignedIdentityId: deploymentIdentity.id
-  }
-}
+### Common Issues
 
-module indexer 'modules/onelake-index/createOneLakeIndexer.bicep' = {
-  name: 'create-indexer'
-  params: {
-    searchServiceName: 'mySearchService'
-    indexerName: 'onelake-indexer'
-    datasourceName: datasource.outputs.datasourceName
-    indexName: index.outputs.indexName
-    userAssignedIdentityId: deploymentIdentity.id
-  }
-  dependsOn: [searchRbac]
-}
-```
+1. **Permission Errors**
+   - Ensure AI Search has system-assigned managed identity enabled
+   - Verify RBAC permissions are set correctly
+   - Check that the user-assigned managed identity has Fabric Admin role
 
-## Contributing
+2. **No Documents Indexed**
+   - Verify lakehouse has documents in the specified path
+   - Check AI Search managed identity has OneLake data access
+   - Review indexer status for detailed error messages
 
-If you'd like to contribute Bicep modules for OneLake indexing operations:
-
-1. Follow the existing module patterns in `fabric/` and `purview/` folders
-2. Wrap the equivalent PowerShell script functionality
-3. Ensure idempotent behavior
-4. Add comprehensive documentation
-5. Update this README with module details
-6. Add examples to the main `infra/examples/` folder
+3. **Storage Account Issues**
+   - Ensure shared storage account is deployed first
+   - Verify storage account name is passed correctly to all modules
+   - Check that managed identity has access to storage account
 
 ## Related Documentation
 
-- **PowerShell Scripts**: `scripts/OneLakeIndex/`
-- **OneLake Index README**: `scripts/OneLakeIndex/README.md`
-- **Module Design Patterns**: `infra/modules/README.md`
-- **Migration Guide**: `MIGRATION_GUIDE.md`
+- [Azure AI Search OneLake Indexing](https://learn.microsoft.com/azure/search/search-howto-index-onelake-files)
+- [Microsoft Fabric OneLake](https://learn.microsoft.com/fabric/onelake/onelake-overview)
+- [Azure Deployment Scripts](https://learn.microsoft.com/azure/azure-resource-manager/bicep/deployment-script-bicep)
+- [Azure Verified Modules (AVM)](https://azure.github.io/Azure-Verified-Modules/)
