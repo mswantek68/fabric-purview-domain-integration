@@ -206,6 +206,7 @@ module fabricDomain './modules/fabric/fabricDomain.bicep' = {
     domainName: domainName
     userAssignedIdentityId: managedIdentity.id
     storageAccountName: sharedStorage.outputs.storageAccountName
+    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -226,6 +227,7 @@ module fabricWorkspace './modules/fabric/fabricWorkspace.bicep' = {
     capacityId: capacity.outputs.resourceId
     userAssignedIdentityId: managedIdentity.id
     storageAccountName: sharedStorage.outputs.storageAccountName
+    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -245,6 +247,7 @@ module ensureCapacity './modules/fabric/ensureActiveCapacity.bicep' = {
     fabricCapacityName: fabricCapacityName
     userAssignedIdentityId: managedIdentity.id
     storageAccountName: sharedStorage.outputs.storageAccountName
+    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -273,6 +276,7 @@ module assignWorkspacesToDomain './modules/fabric/assignWorkspaceToDomain.bicep'
     capacityId: capacity.outputs.resourceId
     userAssignedIdentityId: managedIdentity.id
     storageAccountName: sharedStorage.outputs.storageAccountName
+    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -296,6 +300,7 @@ module lakehouses './modules/fabric/createLakehouses.bicep' = {
     lakehouseNames: lakehouseNames
     userAssignedIdentityId: managedIdentity.id
     storageAccountName: sharedStorage.outputs.storageAccountName
+    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -316,6 +321,7 @@ module purviewCollection './modules/purview/createPurviewCollection.bicep' = {
     collectionName: purviewDataMapDomainName
     userAssignedIdentityId: managedIdentity.id
     storageAccountName: sharedStorage.outputs.storageAccountName
+    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -338,6 +344,7 @@ module registerDatasource './modules/purview/registerFabricDatasource.bicep' = {
     workspaceName: fabricWorkspaceName
     userAssignedIdentityId: managedIdentity.id
     storageAccountName: sharedStorage.outputs.storageAccountName
+    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -361,6 +368,7 @@ module triggerScan './modules/purview/triggerPurviewScan.bicep' = if (enablePurv
     collectionId: purviewDataMapDomainName
     userAssignedIdentityId: managedIdentity.id
     storageAccountName: sharedStorage.outputs.storageAccountName
+    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -382,6 +390,7 @@ module logAnalytics './modules/monitoring/connectLogAnalytics.bicep' = if (enabl
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     userAssignedIdentityId: managedIdentity.id
     storageAccountName: sharedStorage.outputs.storageAccountName
+    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue

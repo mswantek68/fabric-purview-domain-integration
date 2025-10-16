@@ -16,6 +16,10 @@ param aiSearchSubscriptionId string
 @description('Name of the shared storage account for deployment scripts')
 param storageAccountName string
 
+@description('Storage account key for deployment scripts')
+@secure()
+param storageAccountKey string
+
 @description('User-assigned managed identity ID for authentication')
 param managedIdentityId string
 
@@ -46,6 +50,7 @@ resource createSkillsetsScript 'Microsoft.Resources/deploymentScripts@2023-08-01
     timeout: 'PT30M'
     forceUpdateTag: timestamp
     storageAccountSettings: {
+      storageAccountKey: storageAccountKey
       storageAccountName: storageAccountName
     }
     environmentVariables: [

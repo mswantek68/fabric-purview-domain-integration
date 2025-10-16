@@ -48,3 +48,6 @@ output storageAccountName string = storageAccount.outputs.name
 
 @description('The primary blob endpoint')
 output blobEndpoint string = storageAccount.outputs.primaryBlobEndpoint
+
+@description('The primary access key for the storage account')
+output storageAccountKey string = storageAccount.outputs.primaryAccessKey

@@ -5,7 +5,7 @@ using 'main-with-modules.bicep'
 // ========================================================================
 
 // Resource Group Configuration
-param location = 'eastus' // Change to your preferred Azure region
+param location = 'eastus2' // Change to your preferred Azure region
 param tags = {
   environment: 'dev'
   project: 'fabric-purview-integration'
@@ -13,16 +13,16 @@ param tags = {
 }
 
 // Fabric Capacity Configuration
-param fabricCapacityName = 'swancapacity002'
+param fabricCapacityName = 'swancapacitytest1016'
 param fabricCapacitySKU = 'F8'
-param capacityAdminMembers = [''] // Add admin UPNs or object IDs: ['admin@yourdomain.onmicrosoft.com']
+param capacityAdminMembers = ['admin@MngEnv282784.onmicrosoft.com'] // Add admin UPNs or object IDs: ['admin@yourdomain.onmicrosoft.com']
 
 // Fabric Workspace and Domain Names
-param fabricWorkspaceName = 'workspace002'
-param domainName = 'datadomain002'
+param fabricWorkspaceName = 'workspacetest1016'
+param domainName = 'datadomain1016'
 
 // Purview Integration
-param purviewAccountName = 'Purview'
+param purviewAccountName = 'swantekPurview'
 
 // ========================================================================
 // PURVIEW DATA MAP CONFIGURATION

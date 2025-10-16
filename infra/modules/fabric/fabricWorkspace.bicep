@@ -14,6 +14,10 @@ param userAssignedIdentityId string
 @description('Name of the shared storage account for deployment scripts')
 param storageAccountName string
 
+@description('Storage account key for deployment scripts')
+@secure()
+param storageAccountKey string
+
 // Generate unique names for deployment script resources
 var deploymentScriptName = 'deploy-fabric-workspace-${uniqueString(resourceGroup().id, workspaceName)}'
 
@@ -36,6 +40,7 @@ resource fabricWorkspaceDeploymentScript 'Microsoft.Resources/deploymentScripts@
     timeout: 'PT30M'
     cleanupPreference: 'OnSuccess'
     storageAccountSettings: {
+      storageAccountKey: storageAccountKey
       storageAccountName: storageAccountName
     }
     environmentVariables: [
