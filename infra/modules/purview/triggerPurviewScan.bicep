@@ -16,9 +16,6 @@ param userAssignedIdentityId string
 @description('Name of the shared storage account for deployment scripts')
 param storageAccountName string
 
-@description('Storage account key for deployment scripts')
-@secure()
-param storageAccountKey string
 
 // Generate unique names for deployment script resources
 var deploymentScriptName = 'trigger-purview-scan-${uniqueString(resourceGroup().id, workspaceId)}'
@@ -42,7 +39,6 @@ resource triggerPurviewScanDeploymentScript 'Microsoft.Resources/deploymentScrip
     timeout: 'PT1H'
     cleanupPreference: 'OnSuccess'
     storageAccountSettings: {
-      storageAccountKey: storageAccountKey
       storageAccountName: storageAccountName
     }
     environmentVariables: [

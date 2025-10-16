@@ -13,9 +13,6 @@ param userAssignedIdentityId string
 @description('Name of the shared storage account for deployment scripts')
 param storageAccountName string
 
-@description('Storage account key for deployment scripts')
-@secure()
-param storageAccountKey string
 
 @description('Resume timeout in seconds')
 param resumeTimeoutSeconds int = 900
@@ -45,7 +42,6 @@ resource ensureCapacityDeploymentScript 'Microsoft.Resources/deploymentScripts@2
     timeout: 'PT30M'
     cleanupPreference: 'OnSuccess'
     storageAccountSettings: {
-      storageAccountKey: storageAccountKey
       storageAccountName: storageAccountName
     }
     environmentVariables: [

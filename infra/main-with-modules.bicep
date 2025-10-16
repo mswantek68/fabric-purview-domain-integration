@@ -157,11 +157,18 @@ module capacity 'br/public:avm/res/fabric/capacity:0.1.1' = {
 // ============================================================================
 // STEP 2: CREATE MANAGED IDENTITY FOR DEPLOYMENT SCRIPTS
 // ============================================================================
+// This managed identity is used by all deployment scripts for:
+// - Authenticating to Azure Storage (Storage File Data Privileged Contributor)
+// - Executing Fabric operations (requires Fabric Administrator role)
+// - Executing Purview operations (requires Purview Data Curator role)
 
-resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: 'id-fabric-automation-${uniqueString(resourceGroup().id)}'
-  location: location
-  tags: tags
+module managedIdentity './modules/shared/managedIdentity.bicep' = {
+  name: 'managed-identity-${uniqueString(resourceGroup().id)}'
+  params: {
+    managedIdentityName: 'id-fabric-automation-${uniqueString(resourceGroup().id)}'
+    location: location
+    tags: tags
+  }
 }
 
 // ============================================================================
@@ -175,7 +182,7 @@ resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
 // 
 // Example (requires role definition IDs):
 // resource fabricAdminRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-//   name: guid(resourceGroup().id, managedIdentity.id, 'FabricAdmin')
+//   name: guid(resourceGroup().id, managedIdentity.outputs.managedIdentityId, 'FabricAdmin')
 //   properties: {
 //     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '<fabric-admin-role-id>')
 //     principalId: managedIdentity.properties.principalId
@@ -186,11 +193,15 @@ resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
 // ============================================================================
 // STEP 4: DEPLOY SHARED STORAGE ACCOUNT (for all deployment scripts)
 // ============================================================================
+// Storage account uses managed identity authentication (WAF-compliant)
+// - allowSharedKeyAccess: false (security best practice)
+// - RBAC: Managed identity has Storage File Data Privileged Contributor role
 
 module sharedStorage './modules/shared/deploymentScriptStorage.bicep' = {
   name: 'shared-storage-${uniqueString(resourceGroup().id)}'
   params: {
     storageAccountName: 'stdeploy${uniqueString(resourceGroup().id)}'
+    managedIdentityPrincipalId: managedIdentity.outputs.managedIdentityPrincipalId
     location: location
     tags: tags
   }
@@ -204,9 +215,8 @@ module fabricDomain './modules/fabric/fabricDomain.bicep' = {
   name: 'fabric-domain-${uniqueString(resourceGroup().id)}'
   params: {
     domainName: domainName
-    userAssignedIdentityId: managedIdentity.id
+    userAssignedIdentityId: managedIdentity.outputs.managedIdentityId
     storageAccountName: sharedStorage.outputs.storageAccountName
-    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -225,9 +235,8 @@ module fabricWorkspace './modules/fabric/fabricWorkspace.bicep' = {
   params: {
     workspaceName: fabricWorkspaceName
     capacityId: capacity.outputs.resourceId
-    userAssignedIdentityId: managedIdentity.id
+    userAssignedIdentityId: managedIdentity.outputs.managedIdentityId
     storageAccountName: sharedStorage.outputs.storageAccountName
-    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -245,9 +254,8 @@ module ensureCapacity './modules/fabric/ensureActiveCapacity.bicep' = {
   params: {
     fabricCapacityId: capacity.outputs.resourceId
     fabricCapacityName: fabricCapacityName
-    userAssignedIdentityId: managedIdentity.id
+    userAssignedIdentityId: managedIdentity.outputs.managedIdentityId
     storageAccountName: sharedStorage.outputs.storageAccountName
-    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -274,9 +282,8 @@ module assignWorkspacesToDomain './modules/fabric/assignWorkspaceToDomain.bicep'
     workspaceName: fabricWorkspaceName
     domainName: domainName
     capacityId: capacity.outputs.resourceId
-    userAssignedIdentityId: managedIdentity.id
+    userAssignedIdentityId: managedIdentity.outputs.managedIdentityId
     storageAccountName: sharedStorage.outputs.storageAccountName
-    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -298,9 +305,8 @@ module lakehouses './modules/fabric/createLakehouses.bicep' = {
     workspaceName: fabricWorkspaceName
     workspaceId: fabricWorkspace.outputs.workspaceId
     lakehouseNames: lakehouseNames
-    userAssignedIdentityId: managedIdentity.id
+    userAssignedIdentityId: managedIdentity.outputs.managedIdentityId
     storageAccountName: sharedStorage.outputs.storageAccountName
-    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -319,9 +325,8 @@ module purviewCollection './modules/purview/createPurviewCollection.bicep' = {
   params: {
     purviewAccountName: purviewAccountName
     collectionName: purviewDataMapDomainName
-    userAssignedIdentityId: managedIdentity.id
+    userAssignedIdentityId: managedIdentity.outputs.managedIdentityId
     storageAccountName: sharedStorage.outputs.storageAccountName
-    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -342,9 +347,8 @@ module registerDatasource './modules/purview/registerFabricDatasource.bicep' = {
     collectionName: purviewDataMapDomainName
     workspaceId: fabricWorkspace.outputs.workspaceId
     workspaceName: fabricWorkspaceName
-    userAssignedIdentityId: managedIdentity.id
+    userAssignedIdentityId: managedIdentity.outputs.managedIdentityId
     storageAccountName: sharedStorage.outputs.storageAccountName
-    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -366,9 +370,8 @@ module triggerScan './modules/purview/triggerPurviewScan.bicep' = if (enablePurv
     workspaceId: fabricWorkspace.outputs.workspaceId
     workspaceName: fabricWorkspaceName
     collectionId: purviewDataMapDomainName
-    userAssignedIdentityId: managedIdentity.id
+    userAssignedIdentityId: managedIdentity.outputs.managedIdentityId
     storageAccountName: sharedStorage.outputs.storageAccountName
-    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -388,9 +391,8 @@ module logAnalytics './modules/monitoring/connectLogAnalytics.bicep' = if (enabl
     workspaceName: fabricWorkspaceName
     workspaceId: fabricWorkspace.outputs.workspaceId
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
-    userAssignedIdentityId: managedIdentity.id
+    userAssignedIdentityId: managedIdentity.outputs.managedIdentityId
     storageAccountName: sharedStorage.outputs.storageAccountName
-    storageAccountKey: sharedStorage.outputs.storageAccountKey
     location: location
     tags: tags
     utcValue: utcValue
@@ -413,9 +415,9 @@ output fabricWorkspaceName string = fabricWorkspaceName
 output fabricDomainName string = domainName
 
 // Managed Identity Outputs
-output managedIdentityId string = managedIdentity.id
-output managedIdentityPrincipalId string = managedIdentity.properties.principalId
-output managedIdentityClientId string = managedIdentity.properties.clientId
+output managedIdentityId string = managedIdentity.outputs.managedIdentityId
+output managedIdentityPrincipalId string = managedIdentity.outputs.managedIdentityPrincipalId
+output managedIdentityClientId string = managedIdentity.outputs.managedIdentityClientId
 
 // Storage Outputs
 output sharedStorageAccountName string = sharedStorage.outputs.storageAccountName

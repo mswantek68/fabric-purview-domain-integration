@@ -31,9 +31,6 @@ param queryPath string = 'Files/documents/reports'
 @description('Name of the shared storage account for deployment scripts')
 param storageAccountName string
 
-@description('Storage account key for deployment scripts')
-@secure()
-param storageAccountKey string
 
 @description('User-assigned managed identity ID for authentication')
 param managedIdentityId string
@@ -65,7 +62,6 @@ resource createDataSourceScript 'Microsoft.Resources/deploymentScripts@2023-08-0
     timeout: 'PT30M'
     forceUpdateTag: timestamp
     storageAccountSettings: {
-      storageAccountKey: storageAccountKey
       storageAccountName: storageAccountName
     }
     environmentVariables: [
