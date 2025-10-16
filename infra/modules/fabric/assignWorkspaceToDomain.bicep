@@ -11,25 +11,11 @@ param tags object = {}
 @description('Managed Identity for deployment script execution')
 param userAssignedIdentityId string
 
+@description('Name of the shared storage account for deployment scripts')
+param storageAccountName string
+
 // Generate unique names for deployment script resources
 var deploymentScriptName = 'assign-domain-${uniqueString(resourceGroup().id, workspaceName, domainName)}'
-var storageAccountName = 'stdom${uniqueString(resourceGroup().id, workspaceName)}'
-
-// Storage account for deployment script
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
-  name: storageAccountName
-  location: location
-  tags: tags
-  sku: {
-    name: 'Standard_LRS'
-  }
-  kind: 'StorageV2'
-  properties: {
-    allowBlobPublicAccess: false
-    minimumTlsVersion: 'TLS1_2'
-    supportsHttpsTrafficOnly: true
-  }
-}
 
 // Deployment script to assign workspace to domain
 resource assignDomainDeploymentScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
@@ -50,8 +36,7 @@ resource assignDomainDeploymentScript 'Microsoft.Resources/deploymentScripts@202
     timeout: 'PT30M'
     cleanupPreference: 'OnSuccess'
     storageAccountSettings: {
-      storageAccountName: storageAccount.name
-      storageAccountKey: storageAccount.listKeys().keys[0].value
+      storageAccountName: storageAccountName
     }
     environmentVariables: [
       {

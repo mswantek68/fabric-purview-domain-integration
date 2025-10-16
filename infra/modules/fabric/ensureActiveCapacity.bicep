@@ -10,6 +10,9 @@ param tags object = {}
 @description('Managed Identity for deployment script execution')
 param userAssignedIdentityId string
 
+@description('Name of the shared storage account for deployment scripts')
+param storageAccountName string
+
 @description('Resume timeout in seconds')
 param resumeTimeoutSeconds int = 900
 
@@ -18,23 +21,6 @@ param pollIntervalSeconds int = 20
 
 // Generate unique names for deployment script resources
 var deploymentScriptName = 'ensure-capacity-${uniqueString(resourceGroup().id, fabricCapacityName)}'
-var storageAccountName = 'stcap${uniqueString(resourceGroup().id, fabricCapacityName)}'
-
-// Storage account for deployment script
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
-  name: storageAccountName
-  location: location
-  tags: tags
-  sku: {
-    name: 'Standard_LRS'
-  }
-  kind: 'StorageV2'
-  properties: {
-    allowBlobPublicAccess: false
-    minimumTlsVersion: 'TLS1_2'
-    supportsHttpsTrafficOnly: true
-  }
-}
 
 // Deployment script to ensure capacity is active
 resource ensureCapacityDeploymentScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
@@ -55,8 +41,7 @@ resource ensureCapacityDeploymentScript 'Microsoft.Resources/deploymentScripts@2
     timeout: 'PT30M'
     cleanupPreference: 'OnSuccess'
     storageAccountSettings: {
-      storageAccountName: storageAccount.name
-      storageAccountKey: storageAccount.listKeys().keys[0].value
+      storageAccountName: storageAccountName
     }
     environmentVariables: [
       {
