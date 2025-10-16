@@ -14,41 +14,52 @@ param location string = resourceGroup().location
 @description('Tags to apply to the storage account')
 param tags object = {}
 
-// Deploy storage account using Azure Verified Module (AVM)
-module storageAccount 'br/public:avm/res/storage/storage-account:0.27.1' = {
-  name: 'deploymentScriptStorage'
-  params: {
-    name: storageAccountName
-    location: location
-    tags: tags
-    kind: 'StorageV2'
-    skuName: 'Standard_LRS'
+// Deploy storage account using native Bicep resource
+// Using native resource instead of AVM to ensure allowSharedKeyAccess is properly set
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: storageAccountName
+  location: location
+  tags: tags
+  sku: {
+    name: 'Standard_LRS'
+  }
+  kind: 'StorageV2'
+  properties: {
+    accessTier: 'Hot'
     allowBlobPublicAccess: false
-    publicNetworkAccess: 'Enabled'
     allowSharedKeyAccess: true  // Required for deployment scripts
+    minimumTlsVersion: 'TLS1_2'
+    publicNetworkAccess: 'Enabled'
+    supportsHttpsTrafficOnly: true
     networkAcls: {
       bypass: 'AzureServices'
       defaultAction: 'Allow'
     }
-    blobServices: {
-      containers: [
-        {
-          name: 'deployment-scripts'
-          publicAccess: 'None'
-        }
-      ]
-    }
+  }
+}
+
+// Create container for deployment scripts
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
+  parent: storageAccount
+  name: 'default'
+}
+
+resource container 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobService
+  name: 'deployment-scripts'
+  properties: {
+    publicAccess: 'None'
   }
 }
 
 @description('The resource ID of the storage account')
-output storageAccountId string = storageAccount.outputs.resourceId
+output storageAccountId string = storageAccount.id
 
 @description('The name of the storage account')
-output storageAccountName string = storageAccount.outputs.name
+output storageAccountName string = storageAccount.name
 
 @description('The primary blob endpoint')
-output blobEndpoint string = storageAccount.outputs.primaryBlobEndpoint
+output blobEndpoint string = storageAccount.properties.primaryEndpoints.blob
 
 @description('The primary access key for the storage account')
-output storageAccountKey string = storageAccount.outputs.primaryAccessKey
+output storageAccountKey string = listKeys(storageAccount.id, storageAccount.apiVersion).keys[0].value
