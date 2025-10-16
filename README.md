@@ -8,7 +8,7 @@ This solution features **dual script support** - both **PowerShell** and **Bash*
 
 This idea will be integrated into a larger deployment. Main point to keep in mind, I am using very atomic scripts to allow for endless configurations as I learn more about how to integrate source systems into Fabric (ie: Databricks, Oracle, SAP, etc.) and Purview domains. This should allow for a custom yaml file that can be adapted for each domain created.
 
-### What Gets Deployed (13 Automated Steps)
+### What Gets Deployed (16 Automated Steps)
 
 - **Microsoft Fabric Capacity**: High-performance compute capacity for Fabric workloads and separation
 - **Fabric Workspace**: Collaborative workspace for data engineering and analytics
@@ -95,7 +95,7 @@ azd auth login --check-status
 # 🚨 ALWAYS preview first!
 azd provision --preview
 
-# Deploy the complete solution (13 automated steps)
+# Deploy the complete solution (16 automated steps)
 azd up
 ```
 
@@ -108,11 +108,14 @@ This will automatically execute:
 6. ✅ **Data Source Registration**: Register Fabric as Purview data source
 7. ✅ **Scan Configuration**: Setup workspace-scoped scan guidance
 8. ✅ **Lakehouse Creation**: Create bronze, silver, gold lakehouses
-9. ✅ **🆕 AI Search RBAC**: Configure managed identity permissions
-10. ✅ **🆕 OneLake Indexer**: Create AI Search indexer for document processing
-11. ✅ **🆕 Document Indexing**: Index documents from bronze lakehouse
-12. ✅ **Purview Scanning**: Execute workspace-scoped Purview scan
-13. ✅ **Monitoring Setup**: Connect Log Analytics workspace
+9. ✅ **🆕 Document Intelligence Resolution**: Locate Document Intelligence endpoint and credentials
+10. ✅ **🆕 Invoice & Bill Extraction**: Parse invoices and utility bills with Azure AI Document Intelligence
+11. ✅ **🆕 Lakehouse Table Materialization**: Publish normalized invoice and utility bill tables in the document lakehouse
+12. ✅ **🆕 AI Search RBAC**: Configure managed identity permissions
+13. ✅ **🆕 OneLake Indexer**: Create AI Search indexer for document processing
+14. ✅ **🆕 Document Indexing**: Index documents from bronze lakehouse
+15. ✅ **Purview Scanning**: Execute workspace-scoped Purview scan
+16. ✅ **Monitoring Setup**: Connect Log Analytics workspace
 
 ## 📋 Prerequisites
 
@@ -302,15 +305,17 @@ The solution now includes **AI Search with OneLake indexing** for intelligent do
 - 🔐 **Seamless RBAC**: Automated managed identity configuration for secure access
 - ⚡ **Real-time Processing**: Documents are indexed as they're added to the bronze lakehouse
 - 🤖 **AI Foundry Integration**: REST API automation for knowledge source connection (Chat Playground requires manual UI setup)
+- 🧾 **Structured Extraction**: Azure AI Document Intelligence converts invoices and utility bills into managed Delta tables (`silver_invoice_*`, `silver_utility_bill_*`)
 
 #### How It Works
 1. **Documents**: Store documents in the bronze lakehouse within the Fabric workspace
 2. **RBAC Setup**: AI Search managed identity is automatically granted Fabric workspace access
 3. **OneLake Indexer**: Creates indexer connecting AI Search to lakehouse using OneLake API
-4. **Document Processing**: Extracts content and metadata from documents automatically
-5. **Search Index**: Creates searchable index with document content and metadata
-6. **AI Foundry Ready**: Backend integration automated for AI Foundry Chat Playground
-7. **Query Interface**: Search documents through Azure AI Search REST API, AI Foundry, or portal
+4. **Document Intelligence** *(new)*: Azure AI Document Intelligence extracts invoice and utility bill data, normalizes headers and line items, and stores raw JSON in OneLake
+5. **Lakehouse Tables** *(new)*: Spark automation converts normalized JSON into managed Delta tables for analytics and governance
+6. **Search Index**: Creates searchable index with document content and metadata
+7. **AI Foundry Ready**: Backend integration automated for AI Foundry Chat Playground
+8. **Query Interface**: Search documents through Azure AI Search REST API, AI Foundry, or portal
 
 #### Example Usage
 ```bash
@@ -346,6 +351,62 @@ The solution includes comprehensive OneLake indexing automation:
 - **95% Automated**: Infrastructure, indexing, RBAC, and API integration
 - **5% Manual**: Chat Playground UI configuration (industry standard limitation)
 - **Full Integration**: REST API connections work with citations and knowledge source access
+
+### Document Intelligence Scripts *(New)*
+
+To enrich OneLake search with structured analytics, the deployment now executes dedicated Document Intelligence automation:
+
+| Script | Purpose | Key Outputs |
+|--------|---------|-------------|
+| `00_resolve_document_intelligence.ps1` | Discovers the Azure AI Document Intelligence endpoint and writes shared configuration to `/tmp/document_intelligence.env`. | Document Intelligence endpoint + API version exported to environment variables |
+| `01_extract_document_intelligence.ps1` | Reads new PDFs from `Files/documents/invoices/` and `Files/documents/utility-bills/`, invokes the `prebuilt-invoice` model, and stores normalized JSON in `Files/raw/document-intelligence/<type>/`. | Raw and normalized JSON payloads plus processing manifests |
+| `02_transform_document_intelligence.ps1` | Runs a Fabric Spark session to convert normalized JSON into Delta tables (`silver_invoice_header`, `silver_invoice_line`, `silver_utility_bill_header`, `silver_utility_bill_line`). | Managed Delta tables ready for Power BI, KQL, or downstream Fabric workloads |
+
+Each script is idempotent and can be executed independently to reprocess specific folders, enabling a repeatable ingestion loop as new statements arrive.
+
+#### Fabric Data Factory Notebook Automation *(New)*
+
+In addition to the PowerShell automation, the repo now ships with a Fabric-friendly notebook that can be orchestrated inside **Data Factory pipelines** for fully managed, event-driven Document Intelligence processing:
+
+- **Notebook path**: `fabric-notebooks/document_intelligence_pipeline.ipynb`
+- **Execution target**: Fabric Data Factory (Data Pipeline) → Notebook activity (Spark)
+- **Trigger model**: Event-based trigger for new files landing in `Files/documents/<type>/` or scheduled runs
+
+##### Notebook workflow
+
+1. Resolve pipeline parameters and environment overrides for the Document Intelligence endpoint, lakehouse name, model IDs, and processing limits.
+2. Enumerate new documents beneath `Files/documents/invoices/` and `Files/documents/utility-bills/` (or any document types you include in the parameter list).
+3. Call Azure AI Document Intelligence with managed identity authentication, polling for completion when required.
+4. Write normalized JSON plus processing manifests back to OneLake (`Files/raw/document-intelligence/...`).
+5. Materialize or refresh Delta tables (`silver_invoice_*`, `silver_utility_bill_*`) to power downstream analytics.
+6. Return a summary DataFrame to drive monitoring dashboards or downstream pipeline branching.
+
+##### Pipeline parameter reference
+
+| Parameter | Required | Default | Purpose |
+|-----------|----------|---------|---------|
+| `documentIntelligenceEndpoint` | ✅ | — | Azure AI Document Intelligence endpoint (https://<region>.cognitiveservices.azure.com) |
+| `documentIntelligenceApiVersion` | ⭕ | `2023-07-31` | API version for analyze requests |
+| `documentLakehouseName` | ✅ | — | Lakehouse name that stores documents and silver tables |
+| `workspaceId` | ⭕ | — | Fabric workspace ID (set when lineage reporting is required) |
+| `documentTypes` | ⭕ | `invoice,utility-bill` | Comma-separated list of document type keys to process |
+| `invoiceModelId` | ⭕ | `prebuilt-invoice` | Model ID used for invoice documents |
+| `utilityModelId` | ⭕ | `prebuilt-invoice` | Model ID used for utility-bill documents |
+| `maxDocumentsPerType` | ⭕ | `25` | Upper bound of documents processed per run (protects pipeline duration) |
+| `forceReprocess` | ⭕ | `false` | When `true`, reprocesses even if normalized JSON already exists |
+
+> **Tip**: When invoking the notebook from ad-hoc Spark sessions (outside Data Factory), you can provide the same values through environment variables such as `DOCUMENT_INTELLIGENCE_ENDPOINT` or `DOCUMENT_LAKEHOUSE_NAME`.
+
+##### Deploying the pipeline
+
+1. Upload the notebook to your Fabric workspace (Lakehouse → Notebook → Upload) or directly from the Data Factory authoring experience.
+2. Create a **Data Pipeline** and add a **Notebook** activity targeting the uploaded notebook.
+3. Bind the parameters above to pipeline parameters or dynamic content (for example, pass `@triggerBody().folderPath` to scope processing by folder).
+4. (Optional) Add a **Get Metadata** activity before the notebook to detect new files and pass a filtered list as a parameter.
+5. Configure an **Event trigger** on Storage events (`Files/documents/**`) or schedule-based trigger, and publish the pipeline.
+6. Monitor run history to validate the summary output; integrate with alerts or Microsoft Fabric Monitoring for production scenarios.
+
+Because the notebook uses managed identity authentication, no keys or secrets are required inside the pipeline definition. Ensure the Fabric workspace's managed identity has the `Cognitive Services User` role on the Document Intelligence resource.
 
 ### Technical Implementation
 
@@ -610,7 +671,7 @@ curl -X GET "https://[search-service].search.windows.net/indexes?api-version=202
 - **Document Processing**: Automatic document indexing from Fabric lakehouse bronze layer
 - **OneLake API**: Integration with preview API `2024-05-01-preview` for direct OneLake access
 - **Managed Identity RBAC**: Automated permission configuration between AI Search and Fabric workspace
-- **Enhanced Automation**: 13-step fully automated deployment pipeline
+- **Enhanced Automation**: 16-step fully automated deployment pipeline
 
 #### 🔧 Improvements
 - **API Modernization**: Fixed deprecated Fabric API endpoints from `/users` to `/roleAssignments`
@@ -742,5 +803,5 @@ This solution leverages:
 - 🔍 **AI Search with OneLake**: Intelligent document search directly from your Fabric workspace
 - 🤖 **Automated RBAC**: Seamless permissions between AI Search and Fabric
 - 📄 **Document Processing**: Automatic indexing of documents in bronze lakehouse
-- 🛠️ **Enhanced Automation**: 13-step fully automated deployment pipeline
+- 🛠️ **Enhanced Automation**: 16-step fully automated deployment pipeline
 - 🐛 **Bug Fixes**: Updated API endpoints and improved error handling

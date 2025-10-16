@@ -11,6 +11,7 @@ $SecureApiResources = @{
     Purview = 'https://purview.azure.net'
     PurviewAlt = 'https://datacatalog.azure.com'
     Storage = 'https://storage.azure.com/'
+    DocumentIntelligence = 'https://cognitiveservices.azure.com/'
 }
 
 # Secure token acquisition with error suppression

@@ -33,6 +33,15 @@ hooks:
     - run: ./scripts/Fabric_Purview_Automation/materialize_document_folders.ps1
       interactive: false
       shell: pwsh
+    - run: ./scripts/DocumentIntelligence/00_resolve_document_intelligence.ps1
+      interactive: false
+      shell: pwsh
+    - run: ./scripts/DocumentIntelligence/01_extract_document_intelligence.ps1
+      interactive: false
+      shell: pwsh
+    - run: ./scripts/DocumentIntelligence/02_transform_document_intelligence.ps1
+      interactive: false
+      shell: pwsh
     - run: ./scripts/OneLakeIndex/01_setup_rbac.ps1
       interactive: false
       shell: pwsh

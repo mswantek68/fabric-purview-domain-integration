@@ -99,6 +99,21 @@ param aiFoundryResourceGroup string
 @description('Optional: AI Foundry subscription id')
 param aiFoundrySubscriptionId string
 
+@description('Optional: Azure AI Document Intelligence (Form Recognizer) account name; leave empty to skip provisioning.')
+param documentIntelligenceName string = ''
+
+@description('SKU for the Document Intelligence account when provisioned.')
+@allowed([
+   'S0'
+   'S1'
+   'S2'
+   'S3'
+])
+param documentIntelligenceSku string = 'S0'
+
+@description('Set to false to skip Document Intelligence deployment even when a name is provided.')
+param enableDocumentIntelligence bool = true
+
 @description('Optional: Execution Managed Identity Principal ID used for RBAC configuration')
 param executionManagedIdentityPrincipalId string = ''
 
@@ -107,6 +122,28 @@ param lakehouseNames string
 
 @description('Default document lakehouse name to use for indexers')
 param documentLakehouseName string
+
+var deployDocumentIntelligence = enableDocumentIntelligence && !empty(documentIntelligenceName)
+var documentIntelligenceResourceId = deployDocumentIntelligence ? resourceId('Microsoft.CognitiveServices/accounts', documentIntelligenceName) : ''
+
+// Provision Azure AI Document Intelligence (Form Recognizer) when requested
+resource documentIntelligence 'Microsoft.CognitiveServices/accounts@2023-05-01' = if (deployDocumentIntelligence) {
+   name: documentIntelligenceName
+   location: resourceGroup().location
+   kind: 'FormRecognizer'
+   sku: {
+      name: documentIntelligenceSku
+   }
+   properties: {
+      customSubDomainName: documentIntelligenceName
+      publicNetworkAccess: 'Enabled'
+      disableLocalAuth: true
+      networkAcls: {
+         defaultAction: 'Allow'
+         ipRules: []
+      }
+   }
+}
 
 // Deploy Fabric Capacity
 module capacity 'br/public:avm/res/fabric/capacity:0.1.1' = {
@@ -152,3 +189,6 @@ output aiFoundrySubscriptionId string = aiFoundrySubscriptionId
 output executionManagedIdentityPrincipalId string = executionManagedIdentityPrincipalId
 output lakehouseNames string = lakehouseNames
 output documentLakehouseName string = documentLakehouseName
+output documentIntelligenceName string = deployDocumentIntelligence ? documentIntelligenceName : ''
+output documentIntelligenceEndpoint string = deployDocumentIntelligence ? reference(documentIntelligenceResourceId, '2023-05-01', 'full').endpoint : ''
+output documentIntelligenceResourceId string = documentIntelligenceResourceId

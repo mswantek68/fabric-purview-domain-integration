@@ -101,7 +101,13 @@ $foldersToCreate = @(
     "Files/documents",
     "Files/documents/contracts", 
     "Files/documents/reports",
-    "Files/documents/presentations"
+    "Files/documents/presentations",
+    "Files/documents/invoices",
+    "Files/documents/utility-bills",
+    "Files/raw/document-intelligence",
+    "Files/raw/document-intelligence/invoices",
+    "Files/raw/document-intelligence/utility-bills",
+    "Files/raw/document-intelligence/_processed"
 )
 
 Write-Host "[materialize] Creating folder structure in OneLake..."

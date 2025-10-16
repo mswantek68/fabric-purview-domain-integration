@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.37.4.10188",
-      "templateHash": "9563824962457634120"
+      "templateHash": "11083699097052071939"
     }
   },
   "parameters": {
@@ -143,6 +143,33 @@
         "description": "Optional: AI Foundry subscription id"
       }
     },
+    "documentIntelligenceName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional: Azure AI Document Intelligence (Form Recognizer) account name; leave empty to skip provisioning."
+      }
+    },
+    "documentIntelligenceSku": {
+      "type": "string",
+      "defaultValue": "S0",
+      "allowedValues": [
+        "S0",
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "metadata": {
+        "description": "SKU for the Document Intelligence account when provisioned."
+      }
+    },
+    "enableDocumentIntelligence": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Set to false to skip Document Intelligence deployment even when a name is provided."
+      }
+    },
     "executionManagedIdentityPrincipalId": {
       "type": "string",
       "defaultValue": "",
@@ -163,7 +190,31 @@
       }
     }
   },
+  "variables": {
+    "deployDocumentIntelligence": "[and(parameters('enableDocumentIntelligence'), not(empty(parameters('documentIntelligenceName'))))]",
+    "documentIntelligenceResourceId": "[if(variables('deployDocumentIntelligence'), resourceId('Microsoft.CognitiveServices/accounts', parameters('documentIntelligenceName')), '')]"
+  },
   "resources": [
+    {
+      "condition": "[variables('deployDocumentIntelligence')]",
+      "type": "Microsoft.CognitiveServices/accounts",
+      "apiVersion": "2023-05-01",
+      "name": "[parameters('documentIntelligenceName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "FormRecognizer",
+      "sku": {
+        "name": "[parameters('documentIntelligenceSku')]"
+      },
+      "properties": {
+        "customSubDomainName": "[parameters('documentIntelligenceName')]",
+        "publicNetworkAccess": "Enabled",
+        "disableLocalAuth": true,
+        "networkAcls": {
+          "defaultAction": "Allow",
+          "ipRules": []
+        }
+      }
+    },
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2022-09-01",
@@ -472,6 +523,18 @@
     "documentLakehouseName": {
       "type": "string",
       "value": "[parameters('documentLakehouseName')]"
+    },
+    "documentIntelligenceName": {
+      "type": "string",
+      "value": "[if(variables('deployDocumentIntelligence'), parameters('documentIntelligenceName'), '')]"
+    },
+    "documentIntelligenceEndpoint": {
+      "type": "string",
+      "value": "[if(variables('deployDocumentIntelligence'), reference(variables('documentIntelligenceResourceId'), '2023-05-01', 'full').endpoint, '')]"
+    },
+    "documentIntelligenceResourceId": {
+      "type": "string",
+      "value": "[variables('documentIntelligenceResourceId')]"
     }
   }
 }

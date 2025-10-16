@@ -4,7 +4,10 @@
 #>
 
 [CmdletBinding()]
-param()
+param(
+  [string]$WorkspaceId = "",
+  [string]$WorkspaceName = ""
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -16,6 +19,105 @@ $SecurityModulePath = Join-Path $PSScriptRoot "../SecurityModule.ps1"
 function Log([string]$m){ Write-Host "[register-datasource] $m" }
 function Warn([string]$m){ Write-Warning "[register-datasource] $m" }
 function Fail([string]$m){ Write-Error "[register-datasource] $m"; Clear-SensitiveVariables -VariableNames @('purviewToken'); exit 1 }
+
+function Get-AzdEnvValues {
+  $values = @{}
+  try {
+    $raw = & azd env get-values 2>$null
+    if ($raw) {
+      $raw -split "`n" | ForEach-Object {
+        if ($_ -match '^(?<key>[^=]+)=(?<value>.*)$') {
+          $values[$Matches['key']] = $Matches['value'].Trim("'", '"')
+        }
+      }
+    }
+  } catch {}
+  return $values
+}
+
+function Get-TempEnvValues {
+  param([string]$Path)
+  $values = @{}
+  if (Test-Path $Path) {
+    Get-Content $Path | ForEach-Object {
+      if ($_ -match '^(?<key>[^=]+)=(?<value>.*)$') {
+        $values[$Matches['key']] = $Matches['value'].Trim()
+      }
+    }
+  }
+  return $values
+}
+
+function Get-AzureEnvFileValues {
+  $values = @{}
+  $envName = $env:AZURE_ENV_NAME
+  if (-not $envName -and (Test-Path '.azure')) {
+    $dirs = Get-ChildItem -Path '.azure' -Directory -ErrorAction SilentlyContinue
+    if ($dirs) { $envName = $dirs[0].Name }
+  }
+  if (-not $envName) { return $values }
+
+  $envFile = Join-Path '.azure' "$envName/.env"
+  if (-not (Test-Path $envFile)) { return $values }
+
+  Get-Content $envFile | ForEach-Object {
+    if ($_ -match '^(?<key>[^=]+)=(?<value>.*)$') {
+      $values[$Matches['key']] = $Matches['value'].Trim("'", '"')
+    }
+  }
+  return $values
+}
+
+function Resolve-WorkspaceContext {
+  param(
+    [string]$WorkspaceId,
+    [string]$WorkspaceName
+  )
+
+  $azdValues = Get-AzdEnvValues
+  $tempValues = Get-TempEnvValues '/tmp/fabric_workspace.env'
+  $azureEnvValues = Get-AzureEnvFileValues
+
+  if (-not $WorkspaceId -and $env:FABRIC_WORKSPACE_ID) { $WorkspaceId = $env:FABRIC_WORKSPACE_ID }
+  if (-not $WorkspaceName -and $env:FABRIC_WORKSPACE_NAME) { $WorkspaceName = $env:FABRIC_WORKSPACE_NAME }
+
+  if (-not $WorkspaceId -and $tempValues.ContainsKey('FABRIC_WORKSPACE_ID')) { $WorkspaceId = $tempValues['FABRIC_WORKSPACE_ID'] }
+  if (-not $WorkspaceName -and $tempValues.ContainsKey('FABRIC_WORKSPACE_NAME')) { $WorkspaceName = $tempValues['FABRIC_WORKSPACE_NAME'] }
+
+  if (-not $WorkspaceId -and $azdValues.ContainsKey('FABRIC_WORKSPACE_ID')) { $WorkspaceId = $azdValues['FABRIC_WORKSPACE_ID'] }
+  if (-not $WorkspaceName -and $azdValues.ContainsKey('FABRIC_WORKSPACE_NAME')) { $WorkspaceName = $azdValues['FABRIC_WORKSPACE_NAME'] }
+  if (-not $WorkspaceName -and $azdValues.ContainsKey('desiredFabricWorkspaceName')) { $WorkspaceName = $azdValues['desiredFabricWorkspaceName'] }
+
+  if (-not $WorkspaceId -and $azureEnvValues.ContainsKey('FABRIC_WORKSPACE_ID')) { $WorkspaceId = $azureEnvValues['FABRIC_WORKSPACE_ID'] }
+  if (-not $WorkspaceName -and $azureEnvValues.ContainsKey('FABRIC_WORKSPACE_NAME')) { $WorkspaceName = $azureEnvValues['FABRIC_WORKSPACE_NAME'] }
+  if (-not $WorkspaceName -and $azureEnvValues.ContainsKey('desiredFabricWorkspaceName')) { $WorkspaceName = $azureEnvValues['desiredFabricWorkspaceName'] }
+
+  if (-not $WorkspaceId -and $env:AZURE_OUTPUTS_JSON) {
+    try {
+      $outputs = $env:AZURE_OUTPUTS_JSON | ConvertFrom-Json
+      if ($outputs.fabricWorkspaceId -and $outputs.fabricWorkspaceId.value) { $WorkspaceId = $outputs.fabricWorkspaceId.value }
+      if (-not $WorkspaceName -and $outputs.desiredFabricWorkspaceName -and $outputs.desiredFabricWorkspaceName.value) {
+        $WorkspaceName = $outputs.desiredFabricWorkspaceName.value
+      }
+    } catch {}
+  }
+
+  if (-not $WorkspaceId) {
+    Fail 'Unable to resolve Fabric workspace id. Ensure create_fabric_workspace.ps1 has completed successfully.'
+  }
+  if (-not $WorkspaceName) {
+    $WorkspaceName = "FabricWorkspace-$WorkspaceId"
+  }
+
+  return [pscustomobject]@{
+    WorkspaceId = $WorkspaceId
+    WorkspaceName = $WorkspaceName
+  }
+}
+
+$workspaceContext = Resolve-WorkspaceContext -WorkspaceId $WorkspaceId -WorkspaceName $WorkspaceName
+$WorkspaceId = $workspaceContext.WorkspaceId
+$WorkspaceName = $workspaceContext.WorkspaceName
 
 # Resolve Purview account and collection name from azd (if present)
 $purviewAccountName = $null; $collectionName = $null

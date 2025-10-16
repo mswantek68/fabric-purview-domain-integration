@@ -5,16 +5,16 @@ using 'main.bicep'
 // ========================================================================
 
 // Fabric Capacity Configuration
-param fabricCapacityName = 'swancapacity002'
+param fabricCapacityName = 'swantekcapacity01'
 param fabricCapacitySKU = 'F8'
-param capacityAdminMembers = [''] // Add admin UPNs or object IDs: ['admin@yourdomain.onmicrosoft.com']
+param capacityAdminMembers = ['admin@MngEnv282784.onmicrosoft.com'] // Add admin UPNs or object IDs: ['admin@yourdomain.onmicrosoft.com']
 
 // Fabric Workspace and Domain Names
-param fabricWorkspaceName = 'workspace002'
-param domainName = 'datadomain002'
+param fabricWorkspaceName = 'swantekworkspace01'
+param domainName = 'swantekdatadomain01'
 
 // Purview Integration
-param purviewAccountName = 'Purview'
+param purviewAccountName = 'swantekPurview'
 
 // ========================================================================
 // PURVIEW DATA MAP CONFIGURATION
@@ -40,14 +40,14 @@ param purviewGovernanceDomainParentId = '' // Empty for top-level
 // ========================================================================
 
 // AI Search Configuration
-param aiSearchName = ''
-param aiSearchResourceGroup = ''
-param aiSearchSubscriptionId = '' // Leave empty to use current subscription
+param aiSearchName = 'aisearchswan2'
+param aiSearchResourceGroup = 'AI_Related'
+param aiSearchSubscriptionId = '48ab3756-f962-40a8-b0cf-b33ddae744bb' // Leave empty to use current subscription
 
 // AI Foundry Configuration  
-param aiFoundryName = ''
-param aiFoundryResourceGroup = ''
-param aiFoundrySubscriptionId = '' // Leave empty to use current subscription
+param aiFoundryName = 'swantekFoundry1'
+param aiFoundryResourceGroup = 'AI_Related'
+param aiFoundrySubscriptionId = '48ab3756-f962-40a8-b0cf-b33ddae744bb' // Leave empty to use current subscription
 
 // ========================================================================
 // EXECUTION AND LAKEHOUSE CONFIGURATION
