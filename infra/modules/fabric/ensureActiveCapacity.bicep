@@ -39,6 +39,7 @@ resource ensureCapacityDeploymentScript 'Microsoft.Resources/deploymentScripts@2
     retentionInterval: 'P1D'
     timeout: 'PT30M'
     cleanupPreference: 'OnSuccess'
+    storageAccountSettings: {}
     environmentVariables: [
       {
         name: 'FABRIC_CAPACITY_ID'

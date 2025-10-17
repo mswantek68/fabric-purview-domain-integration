@@ -74,6 +74,7 @@ resource setupRBACScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
     ]
     scriptContent: loadTextContent('../../../scripts/OneLakeIndex/01_setup_rbac.ps1')
     cleanupPreference: 'OnSuccess'
+    storageAccountSettings: {}
   }
 }
 

@@ -66,11 +66,11 @@ param logAnalyticsWorkspaceId = '' // Required if enableLogAnalytics is true
 // ========================================================================
 
 // AI Search Configuration
-param aiSearchName = ''
-param aiSearchResourceGroup = ''
-param aiSearchSubscriptionId = '' // Leave empty to use current subscription
+param aiSearchName = 'aisearchswan2'
+param aiSearchResourceGroup = 'AI_Related'
+param aiSearchSubscriptionId = '48ab3756-f962-40a8-b0cf-b33ddae744bb' // Leave empty to use current subscription
 
 // AI Foundry Configuration  
-param aiFoundryName = ''
+param aiFoundryName = 'swantekFoundry1'
 param aiFoundryResourceGroup = ''
-param aiFoundrySubscriptionId = '' // Leave empty to use current subscription
+param aiFoundrySubscriptionId = '48ab3756-f962-40a8-b0cf-b33ddae744bb' // Leave empty to use current subscription

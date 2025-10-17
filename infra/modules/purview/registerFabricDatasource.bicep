@@ -36,6 +36,7 @@ resource registerFabricDatasourceDeploymentScript 'Microsoft.Resources/deploymen
     retentionInterval: 'P1D'
     timeout: 'PT30M'
     cleanupPreference: 'OnSuccess'
+    storageAccountSettings: {}
     environmentVariables: [
       {
         name: 'PURVIEW_ACCOUNT_NAME'

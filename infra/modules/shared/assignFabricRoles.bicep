@@ -45,6 +45,7 @@ resource assignFabricRolesScript 'Microsoft.Resources/deploymentScripts@2023-08-
     retentionInterval: 'P1D'
     timeout: 'PT10M'
     cleanupPreference: 'OnSuccess'
+    storageAccountSettings: {}
     environmentVariables: [
       {
         name: 'MANAGED_IDENTITY_PRINCIPAL_ID'

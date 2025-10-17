@@ -36,6 +36,7 @@ resource triggerPurviewScanDeploymentScript 'Microsoft.Resources/deploymentScrip
     retentionInterval: 'P1D'
     timeout: 'PT1H'
     cleanupPreference: 'OnSuccess'
+    storageAccountSettings: {}
     environmentVariables: [
       {
         name: 'PURVIEW_ACCOUNT_NAME'

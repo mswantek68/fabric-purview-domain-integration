@@ -34,6 +34,7 @@ resource fabricWorkspaceDeploymentScript 'Microsoft.Resources/deploymentScripts@
     retentionInterval: 'P1D'
     timeout: 'PT30M'
     cleanupPreference: 'OnSuccess'
+    storageAccountSettings: {}
     environmentVariables: [
       {
         name: 'FABRIC_WORKSPACE_NAME'

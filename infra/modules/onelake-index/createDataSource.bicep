@@ -95,6 +95,7 @@ resource createDataSourceScript 'Microsoft.Resources/deploymentScripts@2023-08-0
     ]
     scriptContent: loadTextContent('../../../scripts/OneLakeIndex/04_create_onelake_datasource.ps1')
     cleanupPreference: 'OnSuccess'
+    storageAccountSettings: {}
   }
 }
 
