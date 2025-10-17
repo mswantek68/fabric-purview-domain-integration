@@ -30,8 +30,12 @@ param tags object = {}
 @description('Principal ID of the managed identity that will access this storage account')
 param managedIdentityPrincipalId string
 
+// Storage File Data Privileged Contributor role ID  
+// Required for deployment scripts - grants full access to file shares
+var storageFileDataPrivilegedContributorRoleId = '69566ab7-960f-475b-8e7c-b3118f30c6bd'
+
 // Storage Blob Data Contributor role ID
-// Required for deployment scripts to write files to the storage account
+// Also required for blob access in deployment scripts
 var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 
 // Create storage account directly (no AVM module)
@@ -46,7 +50,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   properties: {
     accessTier: 'Hot'
     allowBlobPublicAccess: false
-    allowSharedKeyAccess: true // Required for deployment scripts
+    allowSharedKeyAccess: true // REQUIRED for deployment scripts - they need key-based auth
     minimumTlsVersion: 'TLS1_2'
     supportsHttpsTrafficOnly: true
     publicNetworkAccess: 'Enabled'
@@ -73,12 +77,23 @@ resource container 'Microsoft.Storage/storageAccounts/blobServices/containers@20
   }
 }
 
-// Assign RBAC role to managed identity
-resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+// Assign RBAC role to managed identity (Blob access)
+resource blobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(storageAccount.id, managedIdentityPrincipalId, storageBlobDataContributorRoleId)
   scope: storageAccount
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataContributorRoleId)
+    principalId: managedIdentityPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Assign RBAC role to managed identity (File share access - required for deployment scripts)
+resource fileRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storageAccount.id, managedIdentityPrincipalId, storageFileDataPrivilegedContributorRoleId)
+  scope: storageAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageFileDataPrivilegedContributorRoleId)
     principalId: managedIdentityPrincipalId
     principalType: 'ServicePrincipal'
   }

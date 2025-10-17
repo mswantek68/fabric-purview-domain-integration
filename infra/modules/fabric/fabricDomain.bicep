@@ -6,22 +6,19 @@ param utcValue string = utcNow()
 @description('Tags to apply to resources')
 param tags object = {}
 
-@description('Managed Identity for deployment script execution')
+@description('Managed Identity resource ID for deployment script execution')
 param userAssignedIdentityId string
 
-@description('Name of the shared storage account for deployment scripts')
+@description('Storage account name for deployment scripts (managed identity auth)')
 param storageAccountName string
 
 @description('Storage account key for deployment scripts')
 @secure()
 param storageAccountKey string
 
-
-
-// Generate unique names for deployment script resources
 var deploymentScriptName = 'deploy-fabric-domain-${uniqueString(resourceGroup().id, domainName)}'
 
-// Deployment script to create Fabric domain
+// Deployment script using native Azure resource with managed identity
 resource fabricDomainDeploymentScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   name: deploymentScriptName
   location: location
@@ -50,92 +47,40 @@ resource fabricDomainDeploymentScript 'Microsoft.Resources/deploymentScripts@202
       }
     ]
     scriptContent: '''
-# Fabric Domain Creation Script
-param(
-  [string]$DomainName = $env:FABRIC_DOMAIN_NAME
-)
-
+param([string]$DomainName = $env:FABRIC_DOMAIN_NAME)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-
-function Log([string]$m) { 
-  Write-Host "[fabric-domain] $m" 
-  Write-Output "[fabric-domain] $m"
-}
-function Warn([string]$m) { 
-  Write-Warning "[fabric-domain] $m"
-  Write-Output "[WARNING] $m"
-}
-function Fail([string]$m) { 
-  Write-Error "[fabric-domain] $m"
-  Write-Output "[ERROR] $m"
-  throw $m
-}
-
-if (-not $DomainName) { 
-  Fail 'FABRIC_DOMAIN_NAME is required'
-}
-
+function Log([string]$m) { Write-Host "[fabric-domain] $m"; Write-Output "[fabric-domain] $m" }
+if (-not $DomainName) { throw "FABRIC_DOMAIN_NAME is required" }
 Log "Starting Fabric domain creation for: $DomainName"
-
-# Acquire tokens
-try { 
-  $accessToken = & az account get-access-token --resource https://analysis.windows.net/powerbi/api --query accessToken -o tsv 
-  if (-not $accessToken) { throw "No Power BI token returned" }
-} catch { 
-  Fail "Failed to obtain Power BI API token (ensure managed identity has Fabric Admin permissions)"
-}
-
-try { 
-  $fabricToken = & az account get-access-token --resource https://api.fabric.microsoft.com --query accessToken -o tsv 
-  if (-not $fabricToken) { throw "No Fabric token returned" }
-} catch { 
-  Fail "Failed to obtain Fabric API token (ensure managed identity has Fabric Admin permissions)"
-}
-
+$fabricToken = (Get-AzAccessToken -ResourceUrl "https://api.fabric.microsoft.com").Token
+if (-not $fabricToken) { throw "Failed to obtain Fabric API token" }
+$headers = @{ 'Authorization' = "Bearer $fabricToken"; 'Content-Type' = 'application/json' }
 $apiFabricRoot = 'https://api.fabric.microsoft.com/v1'
-
-# Check if domain already exists
+$domainId = $null
 try {
-  $domains = Invoke-RestMethod -Uri "$apiFabricRoot/governance/domains" -Headers @{ Authorization = "Bearer $fabricToken" } -Method Get -ErrorAction Stop
-  $domainId = $null
-  
-  if ($domains -and $domains.value) { 
+  Log "Checking if domain exists..."
+  $domains = Invoke-RestMethod -Uri "$apiFabricRoot/governance/domains" -Headers $headers -Method Get
+  if ($domains.value) {
     $existingDomain = $domains.value | Where-Object { $_.displayName -eq $DomainName -or $_.name -eq $DomainName }
-    if ($existingDomain) { 
-      $domainId = $existingDomain.id 
-      Log "Domain '$DomainName' already exists with ID: $domainId"
+    if ($existingDomain) {
+      $domainId = $existingDomain.id
+      Log "Domain already exists with ID: $domainId"
     }
   }
-} catch {
-  Fail "Failed to check existing domains: $_"
-}
-
-# Create domain if it doesn't exist
+} catch { Log "Could not check existing domains: $($_.Exception.Message)" }
 if (-not $domainId) {
-  Log "Creating Fabric domain '$DomainName'..."
-  try {
-    $payload = @{ displayName = $DomainName } | ConvertTo-Json -Depth 4
-    $resp = Invoke-WebRequest -Uri "$apiFabricRoot/admin/domains" -Method Post -Headers @{ Authorization = "Bearer $fabricToken"; 'Content-Type' = 'application/json' } -Body $payload -UseBasicParsing -ErrorAction Stop
-    $body = $resp.Content | ConvertFrom-Json -ErrorAction SilentlyContinue
-    $domainId = $body.id
-    Log "Created domain with ID: $domainId"
-  } catch { 
-    Fail "Domain creation failed: $_"
-  }
+  Log "Creating new Fabric domain: $DomainName"
+  $payload = @{ displayName = $DomainName } | ConvertTo-Json
+  $response = Invoke-RestMethod -Uri "$apiFabricRoot/admin/domains" -Method Post -Headers $headers -Body $payload
+  $domainId = $response.id
+  Log "✅ Created domain with ID: $domainId"
 }
-
 Log "Fabric domain deployment completed"
-
-# Set outputs for Bicep
-$DeploymentScriptOutputs = @{
-  domainId = $domainId
-  domainName = $DomainName
-}
+$DeploymentScriptOutputs = @{ domainId = $domainId; domainName = $DomainName }
     '''
   }
 }
 
-// Outputs
 output domainId string = fabricDomainDeploymentScript.properties.outputs.domainId
 output domainName string = fabricDomainDeploymentScript.properties.outputs.domainName

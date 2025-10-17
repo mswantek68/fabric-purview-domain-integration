@@ -109,10 +109,6 @@ resource createIndexerScript 'Microsoft.Resources/deploymentScripts@2023-08-01' 
     ]
     scriptContent: loadTextContent('../../../scripts/OneLakeIndex/05_create_onelake_indexer.ps1')
     cleanupPreference: 'OnSuccess'
-    storageAccountSettings: {
-      storageAccountName: storageAccountName
-      storageAccountKey: storageAccountKey
-    }
   }
 }
 
