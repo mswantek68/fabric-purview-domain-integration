@@ -11,6 +11,13 @@
 @description('Managed Identity resource ID')
 param userAssignedIdentityId string
 
+@description('Name of the shared storage account for deployment scripts')
+param storageAccountName string
+
+@description('Storage account key for deployment scripts')
+@secure()
+param storageAccountKey string
+
 @description('Principal ID of the managed identity')
 param managedIdentityPrincipalId string
 
@@ -48,7 +55,10 @@ resource assignPurviewRolesScript 'Microsoft.Resources/deploymentScripts@2023-08
     retentionInterval: 'P1D'
     timeout: 'PT10M'
     cleanupPreference: 'OnSuccess'
-    storageAccountSettings: {}
+    storageAccountSettings: {
+      storageAccountName: storageAccountName
+      storageAccountKey: storageAccountKey
+    }
     environmentVariables: [
       {
         name: 'MANAGED_IDENTITY_PRINCIPAL_ID'

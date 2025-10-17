@@ -13,6 +13,13 @@ param tags object = {}
 @description('Managed Identity for deployment script execution')
 param userAssignedIdentityId string
 
+@description('Name of the shared storage account for deployment scripts')
+param storageAccountName string
+
+@description('Storage account key for deployment scripts')
+@secure()
+param storageAccountKey string
+
 
 
 // Generate unique names for deployment script resources
@@ -36,7 +43,10 @@ resource triggerPurviewScanDeploymentScript 'Microsoft.Resources/deploymentScrip
     retentionInterval: 'P1D'
     timeout: 'PT1H'
     cleanupPreference: 'OnSuccess'
-    storageAccountSettings: {}
+    storageAccountSettings: {
+      storageAccountName: storageAccountName
+      storageAccountKey: storageAccountKey
+    }
     environmentVariables: [
       {
         name: 'PURVIEW_ACCOUNT_NAME'

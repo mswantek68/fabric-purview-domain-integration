@@ -81,7 +81,10 @@ resource createIndexScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = 
     ]
     scriptContent: loadTextContent('../../../scripts/OneLakeIndex/03_create_onelake_index.ps1')
     cleanupPreference: 'OnSuccess'
-    storageAccountSettings: {}
+    storageAccountSettings: {
+      storageAccountName: storageAccountName
+      storageAccountKey: storageAccountKey
+    }
   }
 }
 

@@ -60,7 +60,10 @@ resource createSkillsetsScript 'Microsoft.Resources/deploymentScripts@2023-08-01
     ]
     scriptContent: loadTextContent('../../../scripts/OneLakeIndex/02_create_onelake_skillsets.ps1')
     cleanupPreference: 'OnSuccess'
-    storageAccountSettings: {}
+    storageAccountSettings: {
+      storageAccountName: storageAccountName
+      storageAccountKey: storageAccountKey
+    }
   }
 }
 

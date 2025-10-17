@@ -13,13 +13,13 @@ param tags = {
 }
 
 // Fabric Capacity Configuration
-param fabricCapacityName = 'swancapacitytest1016'
+param fabricCapacityName = 'swancapacitytest1017'
 param fabricCapacitySKU = 'F8'
 param capacityAdminMembers = ['admin@MngEnv282784.onmicrosoft.com'] // Add admin UPNs or object IDs: ['admin@yourdomain.onmicrosoft.com']
 
 // Fabric Workspace and Domain Names
-param fabricWorkspaceName = 'workspacetest1016'
-param domainName = 'datadomain1016'
+param fabricWorkspaceName = 'workspacetest1017'
+param domainName = 'datadomain1017'
 
 // Purview Integration
 param purviewAccountName = 'swantekPurview'
