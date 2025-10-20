@@ -516,3 +516,137 @@ jobs:
           echo "- **Purview:** ${{ needs.load-config.outputs.purview_account }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ All operations completed using PowerShell scripts (no Bicep deployment scripts!)"
+
+  # ============================================================================
+  # JOB 14: Send Telemetry to Log Analytics
+  # ============================================================================
+  send-telemetry:
+    name: Send Telemetry to Log Analytics
+    needs: [
+      load-config,
+      get-capacity-info,
+      ensure-capacity,
+      create-fabric-domain,
+      create-fabric-workspace,
+      assign-workspace-to-domain,
+      create-lakehouses,
+      create-purview-collection,
+      register-fabric-datasource,
+      deployment-summary
+    ]
+    runs-on: ubuntu-latest
+    if: always()  # Run even if previous jobs failed
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ needs.load-config.outputs.azure_client_id }}
+          tenant-id: ${{ needs.load-config.outputs.azure_tenant_id }}
+          subscription-id: ${{ needs.load-config.outputs.azure_subscription_id }}
+      
+      - name: Calculate Workflow Duration
+        id: duration
+        shell: pwsh
+        run: |
+          $startTime = [DateTime]::Parse("${{ github.event.workflow_run.created_at || github.event.workflow_run.updated_at }}")
+          $endTime = [DateTime]::UtcNow
+          $durationSeconds = [int]($endTime - $startTime).TotalSeconds
+          
+          # If start time unavailable, estimate from job start
+          if ($durationSeconds -le 0) {
+            $durationSeconds = 300  # Default 5 minutes
+          }
+          
+          echo "duration_seconds=$durationSeconds" >> $env:GITHUB_OUTPUT
+          Write-Host "⏱️ Workflow duration: $durationSeconds seconds"
+      
+      - name: Send Workflow Telemetry
+        shell: pwsh
+        run: |
+          # Build telemetry payload
+          $telemetry = @{
+            # Timestamp (must be in ISO 8601 format)
+            Timestamp = (Get-Date).ToUniversalTime().ToString("o")
+            
+            # Workflow Metadata
+            RunId = "${{ github.run_id }}"
+            RunNumber = "${{ github.run_number }}"
+            RunAttempt = "${{ github.run_attempt }}"
+            Workflow = "${{ github.workflow }}"
+            Repository = "${{ github.repository }}"
+            Branch = "${{ github.ref_name }}"
+            Commit = "${{ github.sha }}"
+            Actor = "${{ github.actor }}"
+            Event = "${{ github.event_name }}"
+            
+            # Environment & Configuration
+            Environment = "${{ inputs.environment }}"
+            ConfigFile = "${{ inputs.config_file }}"
+            SkipInfrastructure = "${{ inputs.skip_infrastructure }}"
+            DryRun = "${{ inputs.dry_run }}"
+            
+            # Azure Context
+            TenantId = "${{ needs.load-config.outputs.azure_tenant_id }}"
+            SubscriptionId = "${{ needs.load-config.outputs.azure_subscription_id }}"
+            ResourceGroup = "${{ needs.load-config.outputs.azure_resource_group }}"
+            
+            # Fabric Configuration
+            FabricCapacityName = "${{ needs.load-config.outputs.fabric_capacity_name }}"
+            FabricDomainName = "${{ needs.load-config.outputs.fabric_domain_name }}"
+            FabricDomainEnabled = "${{ needs.load-config.outputs.fabric_domain_enabled }}"
+            FabricWorkspaceName = "${{ needs.load-config.outputs.fabric_workspace_name }}"
+            FabricWorkspaceEnabled = "${{ needs.load-config.outputs.fabric_workspace_enabled }}"
+            FabricLakehousesEnabled = "${{ needs.load-config.outputs.fabric_lakehouses_enabled }}"
+            
+            # Purview Configuration
+            PurviewAccount = "${{ needs.load-config.outputs.purview_account }}"
+            PurviewCollectionName = "${{ needs.load-config.outputs.purview_collection_name }}"
+            PurviewCollectionEnabled = "${{ needs.load-config.outputs.purview_collection_enabled }}"
+            PurviewDatasourceEnabled = "${{ needs.load-config.outputs.purview_datasource_enabled }}"
+            PurviewScanEnabled = "${{ needs.load-config.outputs.purview_scan_enabled }}"
+            
+            # Job Statuses (success/failure/skipped)
+            GetCapacityInfoStatus = "${{ needs.get-capacity-info.result }}"
+            EnsureCapacityStatus = "${{ needs.ensure-capacity.result }}"
+            CreateDomainStatus = "${{ needs.create-fabric-domain.result }}"
+            CreateWorkspaceStatus = "${{ needs.create-fabric-workspace.result }}"
+            AssignToDomainStatus = "${{ needs.assign-workspace-to-domain.result }}"
+            CreateLakehousesStatus = "${{ needs.create-lakehouses.result }}"
+            CreateCollectionStatus = "${{ needs.create-purview-collection.result }}"
+            RegisterDatasourceStatus = "${{ needs.register-fabric-datasource.result }}"
+            DeploySummaryStatus = "${{ needs.deployment-summary.result }}"
+            
+            # Overall Status (success if all required jobs succeeded)
+            OverallStatus = if (
+              "${{ needs.create-fabric-workspace.result }}" -eq "success" -and
+              "${{ needs.create-purview-collection.result }}" -eq "success"
+            ) { "success" } else { "failure" }
+            
+            # Timing
+            DurationSeconds = ${{ steps.duration.outputs.duration_seconds }}
+            StartedAt = "${{ github.event.repository.created_at }}"
+            CompletedAt = (Get-Date).ToUniversalTime().ToString("o")
+            
+            # Resource Outputs (if available from future enhancements)
+            # These would come from job outputs if we add them later
+            FabricDomainId = ""
+            FabricWorkspaceId = ""
+            PurviewCollectionId = ""
+            
+            # Traceability
+            WorkflowUrl = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            CommitUrl = "https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+          }
+          
+          Write-Host "📊 Telemetry Data:"
+          $telemetry | ConvertTo-Json -Depth 2 | Write-Host
+          
+          # Send to Log Analytics
+          ./scripts/monitoring/Send-WorkflowTelemetry.ps1 `
+            -WorkspaceId "${{ secrets.LOG_ANALYTICS_WORKSPACE_ID }}" `
+            -WorkspaceKey "${{ secrets.LOG_ANALYTICS_WORKSPACE_KEY }}" `
+            -TelemetryData $telemetry
