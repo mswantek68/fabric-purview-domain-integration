@@ -38,7 +38,26 @@ Before starting, ensure you have:
 
 ### Step 1: Create Federated Credentials
 
-Run the setup script to create Azure App Registration with OIDC authentication:
+Run the setup script to create Azure App Registration with OIDC authentication.
+
+**Choose your preferred method:**
+
+#### Option A: PowerShell (Windows/Mac/Linux)
+
+```powershell
+# Navigate to repository
+cd /workspaces/fabric-purview-domain-integration
+
+# Run setup script
+./.github/scripts/setup-federated-credentials.ps1 `
+    -RepositoryFullName "YOUR_ORG/YOUR_REPO"
+
+# Example:
+./.github/scripts/setup-federated-credentials.ps1 `
+    -RepositoryFullName "mswantek68/fabric-purview-domain-integration"
+```
+
+#### Option B: Bash (Linux/Mac/WSL)
 
 ```bash
 # Navigate to repository
@@ -47,8 +66,11 @@ cd /workspaces/fabric-purview-domain-integration
 # Make script executable
 chmod +x .github/scripts/setup-federated-credentials.sh
 
-# Run setup (provide your GitHub org/repo when prompted)
-./.github/scripts/setup-federated-credentials.sh
+# Run setup
+./.github/scripts/setup-federated-credentials.sh YOUR_ORG/YOUR_REPO
+
+# Example:
+./.github/scripts/setup-federated-credentials.sh mswantek68/fabric-purview-domain-integration
 ```
 
 **What this creates**:
