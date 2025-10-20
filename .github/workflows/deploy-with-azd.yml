@@ -1,0 +1,119 @@
+name: Deploy with azd + GitHub Actions Automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: 'dev'
+      provision_infrastructure:
+        description: 'Provision infrastructure with azd'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
+env:
+  AZURE_ENV_NAME: fabric-${{ inputs.environment }}
+
+jobs:
+  # ============================================================================
+  # JOB 1: Provision Infrastructure with azd (if enabled)
+  # ============================================================================
+  provision-infrastructure:
+    name: Provision Infrastructure (azd)
+    runs-on: ubuntu-latest
+    if: ${{ inputs.provision_infrastructure == true }}
+    outputs:
+      capacity_id: ${{ steps.azd-outputs.outputs.capacity_id }}
+      resource_group: ${{ steps.azd-outputs.outputs.resource_group }}
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Install azd
+        uses: Azure/setup-azd@v1.0.0
+      
+      - name: Azure Login (Federated)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Initialize azd environment
+        run: |
+          azd env new ${{ env.AZURE_ENV_NAME }} --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
+          # Set environment variables from secrets
+          azd env set AZURE_LOCATION eastus
+          azd env set FABRIC_CAPACITY_SKU F2
+      
+      - name: Provision Infrastructure
+        run: |
+          echo "🚀 Provisioning infrastructure with azd..."
+          azd provision --no-prompt
+      
+      - name: Get azd Outputs
+        id: azd-outputs
+        run: |
+          # Extract outputs from azd
+          CAPACITY_ID=$(azd env get-values | grep FABRIC_CAPACITY_ID | cut -d'=' -f2)
+          RESOURCE_GROUP=$(azd env get-values | grep AZURE_RESOURCE_GROUP | cut -d'=' -f2)
+          
+          echo "capacity_id=$CAPACITY_ID" >> $GITHUB_OUTPUT
+          echo "resource_group=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
+          
+          echo "✅ Infrastructure provisioned:"
+          echo "   Capacity ID: $CAPACITY_ID"
+          echo "   Resource Group: $RESOURCE_GROUP"
+
+  # ============================================================================
+  # JOB 2-N: Continue with your existing GitHub Actions jobs
+  # ============================================================================
+  # Copy your existing jobs from deploy-fabric-integration.yml here
+  # They can use outputs from the provision-infrastructure job
+  
+  load-config:
+    name: Load Configuration
+    needs: [provision-infrastructure]
+    if: always()  # Run even if infrastructure provisioning was skipped
+    runs-on: ubuntu-latest
+    outputs:
+      # ... your existing outputs
+      fabric_capacity_id: ${{ steps.get-capacity.outputs.capacity_id }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Get Capacity ID
+        id: get-capacity
+        run: |
+          # Use output from azd if available, otherwise from config
+          if [ -n "${{ needs.provision-infrastructure.outputs.capacity_id }}" ]; then
+            CAPACITY_ID="${{ needs.provision-infrastructure.outputs.capacity_id }}"
+            echo "Using capacity from azd: $CAPACITY_ID"
+          else
+            # Get from existing resources
+            CAPACITY_ID=$(az fabric capacity show --name ... --query id -o tsv)
+            echo "Using existing capacity: $CAPACITY_ID"
+          fi
+          
+          echo "capacity_id=$CAPACITY_ID" >> $GITHUB_OUTPUT
+      
+      # ... rest of your load-config steps
+
+  # Then your existing jobs: create-fabric-domain, create-fabric-workspace, etc.
+  # They remain unchanged!
