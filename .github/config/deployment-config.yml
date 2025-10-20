@@ -1,0 +1,146 @@
+# ============================================================================
+# Fabric-Purview Integration - Deployment Configuration
+# ============================================================================
+# This file controls which automation steps run during deployment.
+# Set 'enabled: true' for operations you want to execute.
+# All parameters can be overridden via workflow_dispatch inputs.
+
+# ============================================================================
+# AZURE AUTHENTICATION (Federated Credentials - No Secrets!)
+# ============================================================================
+azure:
+  tenant_id: "YOUR_TENANT_ID"
+  subscription_id: "YOUR_SUBSCRIPTION_ID"
+  client_id: "YOUR_APP_REGISTRATION_CLIENT_ID"  # Created via setup script
+  resource_group: "rg-dev101725"
+  location: "eastus2"
+
+# ============================================================================
+# FABRIC CONFIGURATION
+# ============================================================================
+fabric:
+  # Fabric Capacity (must exist before workflows run)
+  capacity:
+    name: "swancapacitytest1017"
+    sku: "F2048"
+    
+  # Domain creation
+  domain:
+    enabled: true
+    name: "Analytics Domain"
+    description: "Data domain managed via GitHub Actions"
+    
+  # Workspace creation
+  workspace:
+    enabled: true
+    name: "analytics-workspace-dev"
+    description: "Development workspace for analytics"
+    
+  # Workspace assignment to domain
+  assign_to_domain:
+    enabled: true
+    
+  # Lakehouse creation
+  lakehouses:
+    enabled: true
+    names:
+      - bronze
+      - silver
+      - gold
+    
+  # Capacity management
+  ensure_active_capacity:
+    enabled: true
+    poll_interval_seconds: 30
+    resume_timeout_seconds: 600
+
+# ============================================================================
+# PURVIEW CONFIGURATION
+# ============================================================================
+purview:
+  account_name: "YOUR_PURVIEW_ACCOUNT_NAME"
+  
+  # Collection creation
+  collection:
+    enabled: true
+    name: "fabric-analytics-collection"
+    description: "Collection for Fabric workspace assets"
+    parent_collection: ""  # Empty for root level
+    
+  # Datasource registration
+  register_datasource:
+    enabled: true
+    
+  # Scan triggering
+  trigger_scan:
+    enabled: false  # Optional - set true to auto-scan
+
+# ============================================================================
+# MONITORING CONFIGURATION
+# ============================================================================
+monitoring:
+  # Log Analytics connection
+  log_analytics:
+    enabled: false  # Optional
+    workspace_id: ""  # Fill if enabled
+
+# ============================================================================
+# RBAC CONFIGURATION
+# ============================================================================
+rbac:
+  # Fabric role assignments
+  fabric_roles:
+    enabled: true
+    
+  # Purview role assignments
+  purview_roles:
+    enabled: true
+
+# ============================================================================
+# ONELAKE INDEX (Optional - AI Search Integration)
+# ============================================================================
+onelake_index:
+  enabled: false  # Set true to enable AI Search indexing
+  
+  ai_search:
+    name: ""
+    resource_group: ""
+    subscription_id: ""
+    
+  ai_foundry:
+    name: ""
+    resource_group: ""
+    subscription_id: ""
+    
+  skillsets:
+    enabled: false
+    
+  data_source:
+    enabled: false
+    name: "onelake-reports-datasource"
+    query_path: "Files/documents/reports"
+    
+  index:
+    enabled: false
+    name: "onelake-documents-index"
+    
+  indexer:
+    enabled: false
+    name: "onelake-reports-indexer"
+
+# ============================================================================
+# DEPLOYMENT OPTIONS
+# ============================================================================
+options:
+  # Skip steps that already succeeded
+  skip_existing: true
+  
+  # Retry failed API calls
+  retry_attempts: 3
+  retry_delay_seconds: 10
+  
+  # Verbose logging
+  debug: false
+  
+  # Dry run (validate without executing)
+  dry_run: false
