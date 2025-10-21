@@ -201,6 +201,7 @@ else
     cat azrest_error_main.json
   fi
 fi
+rm -f azrest_error_main.json
 
     \"subject\": \"repo:$REPO_FULL_NAME:ref:refs/heads/feature/github-actions-automation\",
 
