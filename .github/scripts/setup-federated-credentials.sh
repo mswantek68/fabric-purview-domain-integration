@@ -1,24 +1,24 @@
-#!/bin/bash#!/bin/bash
+#!/bin/bash
 
-# ============================================================================# ============================================================================
+# ============================================================================
 
-# Setup Federated Credentials for GitHub Actions# Setup Federated Credentials for GitHub Actions
+# Setup Federated Credentials for GitHub Actions
 
-# ============================================================================# ============================================================================
+# ============================================================================
 
-# This script creates an Azure App Registration with federated credentials# This script creates an Azure App Registration with federated credentials
+# This script creates an Azure App Registration with federated credentials
 
-# for GitHub Actions OIDC authentication (no secrets required!)# for GitHub Actions OIDC authentication (no secrets required!)
+# for GitHub Actions OIDC authentication (no secrets required!)
 
 ##
 
-# Usage: ./setup-federated-credentials.sh <github-org>/<github-repo># Usage: ./setup-federated-credentials.sh <github-org>/<github-repo>
+# Usage: ./setup-federated-credentials.sh <github-org>/<github-repo>
 
-# Example: ./setup-federated-credentials.sh mswantek68/fabric-purview-domain-integration# Example: ./setup-federated-credentials.sh mswantek68/fabric-purview-domain-integration
+# Example: ./setup-federated-credentials.sh mswantek68/fabric-purview-domain-integration
 
 
 
-set -eset -e
+set -e
 
 
 
