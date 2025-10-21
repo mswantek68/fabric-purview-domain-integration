@@ -106,10 +106,17 @@ if ($isMember -eq "true") {
 Write-Host "➕ Adding service principal to group..." -ForegroundColor Cyan
 
 try {
-    az ad group member add --group $groupId --member-id $spObjectId
+    $azOutput = az ad group member add --group $groupId --member-id $spObjectId --only-show-errors 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "❌ Failed to add service principal to group" -ForegroundColor Red
+        Write-Host "   Error: $azOutput" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "⚠️  Make sure you have permissions to manage this group" -ForegroundColor Yellow
+        exit 1
+    }
     Write-Host "  ✅ Service principal added to group" -ForegroundColor Green
 } catch {
-    Write-Host "❌ Failed to add service principal to group" -ForegroundColor Red
+    Write-Host "❌ Failed to add service principal to group (exception)" -ForegroundColor Red
     Write-Host "   Error: $_" -ForegroundColor Red
     Write-Host ""
     Write-Host "⚠️  Make sure you have permissions to manage this group" -ForegroundColor Yellow
