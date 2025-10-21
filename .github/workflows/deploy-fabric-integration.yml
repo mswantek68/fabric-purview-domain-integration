@@ -640,7 +640,7 @@ jobs:
             
             # Timing
             DurationSeconds = ${{ steps.duration.outputs.duration_seconds }}
-            StartedAt = "${{ github.event.repository.created_at }}"
+            StartedAt = "${{ steps.capture-start-time.outputs.started_at }}"
             CompletedAt = (Get-Date).ToUniversalTime().ToString("o")
             
             # Resource Outputs (if available from future enhancements)
