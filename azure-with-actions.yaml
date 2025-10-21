@@ -1,0 +1,132 @@
+# Example: azure.yaml that triggers GitHub Actions after azd provision
+name: fabric-purview-integration
+metadata:
+  template: fabric-purview-integration@0.0.1-beta
+
+# Infrastructure definition (if you decide to bring back Bicep for core infra)
+infra:
+  provider: bicep
+  path: infra
+  module: main
+
+# Hooks that run at specific points in azd lifecycle
+hooks:
+  # AFTER infrastructure is provisioned
+  postprovision:
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "🚀 Infrastructure provisioned. Triggering GitHub Actions workflow..."
+        
+        # Install GitHub CLI if not present
+        if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+          Write-Host "Installing GitHub CLI..."
+          winget install --id GitHub.cli
+        }
+        
+        # Trigger the workflow
+        $workflowFile = "deploy-fabric-integration.yml"
+        $branch = git rev-parse --abbrev-ref HEAD
+        
+        gh workflow run $workflowFile `
+          --ref $branch `
+          --field environment=dev `
+          --field config_file=.github/config/deployment-config.yml `
+          --field skip_infrastructure=true `
+          --field dry_run=false
+        
+        Write-Host "✅ GitHub Actions workflow triggered!"
+        Write-Host "   View progress: gh run watch"
+        
+    posix:
+      shell: sh
+      run: |
+        echo "🚀 Infrastructure provisioned. Triggering GitHub Actions workflow..."
+        
+        # Install GitHub CLI if not present
+        if ! command -v gh &> /dev/null; then
+          echo "Installing GitHub CLI..."
+          # Add installation commands for your OS
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh -y
+        fi
+        
+        # Trigger the workflow
+        WORKFLOW_FILE="deploy-fabric-integration.yml"
+        BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        
+        gh workflow run "$WORKFLOW_FILE" \
+          --ref "$BRANCH" \
+          --field environment=dev \
+          --field config_file=.github/config/deployment-config.yml \
+          --field skip_infrastructure=true \
+          --field dry_run=false
+        
+        echo "✅ GitHub Actions workflow triggered!"
+        echo "   View progress: gh run watch"
+
+  # OPTIONAL: Wait for workflow completion
+  postup:
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "⏳ Waiting for GitHub Actions workflow to complete..."
+        
+        # Get the latest workflow run
+        $runId = gh run list --workflow=deploy-fabric-integration.yml --limit=1 --json databaseId --jq '.[0].databaseId'
+        
+        if ($runId) {
+          Write-Host "   Watching run: $runId"
+          gh run watch $runId
+          
+          # Check status
+          $status = gh run view $runId --json conclusion --jq '.conclusion'
+          
+          if ($status -eq "success") {
+            Write-Host "✅ GitHub Actions workflow completed successfully!"
+          } else {
+            Write-Host "❌ GitHub Actions workflow failed: $status"
+            exit 1
+          }
+        }
+    
+    posix:
+      shell: sh
+      run: |
+        echo "⏳ Waiting for GitHub Actions workflow to complete..."
+        
+        # Get the latest workflow run
+        RUN_ID=$(gh run list --workflow=deploy-fabric-integration.yml --limit=1 --json databaseId --jq '.[0].databaseId')
+        
+        if [ -n "$RUN_ID" ]; then
+          echo "   Watching run: $RUN_ID"
+          gh run watch "$RUN_ID"
+          
+          # Check status
+          STATUS=$(gh run view "$RUN_ID" --json conclusion --jq '.conclusion')
+          
+          if [ "$STATUS" = "success" ]; then
+            echo "✅ GitHub Actions workflow completed successfully!"
+          else
+            echo "❌ GitHub Actions workflow failed: $STATUS"
+            exit 1
+          fi
+        fi
+
+  # BEFORE teardown (optional cleanup via GitHub Actions)
+  predeprovision:
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "🧹 Triggering cleanup workflow before deprovisioning..."
+        # Trigger a cleanup workflow if you have one
+        # gh workflow run cleanup-resources.yml --ref main
+    
+    posix:
+      shell: sh
+      run: |
+        echo "🧹 Triggering cleanup workflow before deprovisioning..."
+        # Trigger a cleanup workflow if you have one
+        # gh workflow run cleanup-resources.yml --ref main

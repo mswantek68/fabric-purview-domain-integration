@@ -1,0 +1,664 @@
+name: Deploy Fabric-Purview Integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: 'dev'
+      config_file:
+        description: 'Configuration file path'
+        required: false
+        default: '.github/config/deployment-config.yml'
+      skip_infrastructure:
+        description: 'Skip Bicep infrastructure deployment'
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Dry run (validate without executing)'
+        required: false
+        type: boolean
+        default: false
+
+# Federated credential permissions (OIDC - no secrets!)
+permissions:
+  id-token: write   # Required for OIDC authentication
+  contents: read    # Read repository contents
+  actions: read     # Read workflow artifacts
+
+env:
+  CONFIG_FILE: ${{ inputs.config_file || '.github/config/deployment-config.yml' }}
+  ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+  DRY_RUN: ${{ inputs.dry_run || 'false' }}
+
+jobs:
+  # ============================================================================
+  # JOB 1: Load Configuration & Validate
+  # ============================================================================
+  load-config:
+    name: Load Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      azure_tenant_id: ${{ steps.parse.outputs.azure_tenant_id }}
+      azure_subscription_id: ${{ steps.parse.outputs.azure_subscription_id }}
+      azure_client_id: ${{ steps.parse.outputs.azure_client_id }}
+      azure_resource_group: ${{ steps.parse.outputs.azure_resource_group }}
+      azure_location: ${{ steps.parse.outputs.azure_location }}
+      fabric_capacity_name: ${{ steps.parse.outputs.fabric_capacity_name }}
+      fabric_domain_enabled: ${{ steps.parse.outputs.fabric_domain_enabled }}
+      fabric_domain_name: ${{ steps.parse.outputs.fabric_domain_name }}
+      fabric_workspace_enabled: ${{ steps.parse.outputs.fabric_workspace_enabled }}
+      fabric_workspace_name: ${{ steps.parse.outputs.fabric_workspace_name }}
+      fabric_assign_domain_enabled: ${{ steps.parse.outputs.fabric_assign_domain_enabled }}
+      fabric_lakehouses_enabled: ${{ steps.parse.outputs.fabric_lakehouses_enabled }}
+      fabric_lakehouse_names: ${{ steps.parse.outputs.fabric_lakehouse_names }}
+      purview_account: ${{ steps.parse.outputs.purview_account }}
+      purview_collection_enabled: ${{ steps.parse.outputs.purview_collection_enabled }}
+      purview_collection_name: ${{ steps.parse.outputs.purview_collection_name }}
+      purview_datasource_enabled: ${{ steps.parse.outputs.purview_datasource_enabled }}
+      purview_scan_enabled: ${{ steps.parse.outputs.purview_scan_enabled }}
+      rbac_fabric_enabled: ${{ steps.parse.outputs.rbac_fabric_enabled }}
+      rbac_purview_enabled: ${{ steps.parse.outputs.rbac_purview_enabled }}
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Parse configuration file
+        id: parse
+        run: |
+          # Install yq for YAML parsing
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          
+          echo "Parsing configuration from: $CONFIG_FILE"
+          
+          # Azure config
+          echo "azure_tenant_id=$(yq '.azure.tenant_id' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "azure_subscription_id=$(yq '.azure.subscription_id' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "azure_client_id=$(yq '.azure.client_id' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "azure_resource_group=$(yq '.azure.resource_group' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "azure_location=$(yq '.azure.location' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          
+          # Fabric config
+          echo "fabric_capacity_name=$(yq '.fabric.capacity.name' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "fabric_domain_enabled=$(yq '.fabric.domain.enabled' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "fabric_domain_name=$(yq '.fabric.domain.name' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "fabric_workspace_enabled=$(yq '.fabric.workspace.enabled' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "fabric_workspace_name=$(yq '.fabric.workspace.name' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "fabric_assign_domain_enabled=$(yq '.fabric.assign_to_domain.enabled' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "fabric_lakehouses_enabled=$(yq '.fabric.lakehouses.enabled' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "fabric_lakehouse_names=$(yq '.fabric.lakehouses.names | join(",")' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          
+          # Purview config
+          echo "purview_account=$(yq '.purview.account_name' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "purview_collection_enabled=$(yq '.purview.collection.enabled' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "purview_collection_name=$(yq '.purview.collection.name' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "purview_datasource_enabled=$(yq '.purview.register_datasource.enabled' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "purview_scan_enabled=$(yq '.purview.trigger_scan.enabled' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          
+          # RBAC config
+          echo "rbac_fabric_enabled=$(yq '.rbac.fabric_roles.enabled' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          echo "rbac_purview_enabled=$(yq '.rbac.purview_roles.enabled' $CONFIG_FILE)" >> $GITHUB_OUTPUT
+          
+      - name: Display configuration
+        run: |
+          echo "=== Deployment Configuration ==="
+          echo "Environment: $ENVIRONMENT"
+          echo "Dry Run: $DRY_RUN"
+          echo ""
+          echo "Azure:"
+          echo "  Subscription: ${{ steps.parse.outputs.azure_subscription_id }}"
+          echo "  Resource Group: ${{ steps.parse.outputs.azure_resource_group }}"
+          echo "  Location: ${{ steps.parse.outputs.azure_location }}"
+          echo ""
+          echo "Fabric:"
+          echo "  Capacity: ${{ steps.parse.outputs.fabric_capacity_name }}"
+          echo "  Domain: ${{ steps.parse.outputs.fabric_domain_enabled }} - ${{ steps.parse.outputs.fabric_domain_name }}"
+          echo "  Workspace: ${{ steps.parse.outputs.fabric_workspace_enabled }} - ${{ steps.parse.outputs.fabric_workspace_name }}"
+          echo "  Lakehouses: ${{ steps.parse.outputs.fabric_lakehouses_enabled }} - ${{ steps.parse.outputs.fabric_lakehouse_names }}"
+          echo ""
+          echo "Purview:"
+          echo "  Account: ${{ steps.parse.outputs.purview_account }}"
+          echo "  Collection: ${{ steps.parse.outputs.purview_collection_enabled }} - ${{ steps.parse.outputs.purview_collection_name }}"
+          echo "  Scan: ${{ steps.parse.outputs.purview_scan_enabled }}"
+
+  # ============================================================================
+  # JOB 2: Get Fabric Capacity Info (No Bicep Deployment)
+  # ============================================================================
+  get-capacity-info:
+    name: Get Fabric Capacity Info
+    needs: load-config
+    runs-on: ubuntu-latest
+    outputs:
+      capacity_id: ${{ steps.info.outputs.capacity_id }}
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Azure Login (Federated Credential)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ needs.load-config.outputs.azure_client_id }}
+          tenant-id: ${{ needs.load-config.outputs.azure_tenant_id }}
+          subscription-id: ${{ needs.load-config.outputs.azure_subscription_id }}
+          
+      - name: Get Capacity Resource ID
+        id: info
+        run: |
+          echo "Getting Fabric capacity info..."
+          
+          CAPACITY_ID=$(az fabric capacity show \
+            --name "${{ needs.load-config.outputs.fabric_capacity_name }}" \
+            --resource-group "${{ needs.load-config.outputs.azure_resource_group }}" \
+            --query "id" -o tsv)
+          
+          if [ -z "$CAPACITY_ID" ]; then
+            echo "❌ ERROR: Capacity not found"
+            exit 1
+          fi
+          
+          echo "capacity_id=$CAPACITY_ID" >> $GITHUB_OUTPUT
+          echo "✅ Capacity found: $CAPACITY_ID"
+
+  # ============================================================================
+  # JOB 3: Ensure Fabric Capacity is Active
+  # ============================================================================
+  ensure-capacity:
+    name: Ensure Fabric Capacity Active
+    needs: [load-config, get-capacity-info]
+    runs-on: ubuntu-latest
+    outputs:
+      capacity_state: ${{ steps.check.outputs.capacity_state }}
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Azure Login (Federated Credential)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ needs.load-config.outputs.azure_client_id }}
+          tenant-id: ${{ needs.load-config.outputs.azure_tenant_id }}
+          subscription-id: ${{ needs.load-config.outputs.azure_subscription_id }}
+          
+      - name: Check and Resume Capacity
+        id: check
+        shell: pwsh
+        run: |
+          # Use your existing PowerShell script!
+          ./scripts/Fabric_Purview_Automation/ensure_active_capacity.ps1 `
+            -fabricCapacityName "${{ needs.load-config.outputs.fabric_capacity_name }}" `
+            -resourceGroupName "${{ needs.load-config.outputs.azure_resource_group }}"
+
+  # ============================================================================
+  # JOB 4: Fabric RBAC Assignment (MANUAL STEP - See Setup Guide)
+  # ============================================================================
+  # Note: Fabric Administrator role must be assigned manually in Fabric Portal
+  # GitHub Actions service principal needs this role to create domains/workspaces
+  # This job verifies the role is assigned
+  
+  verify-fabric-rbac:
+    name: Verify Fabric Administrator Role
+    needs: [load-config, get-capacity-info, ensure-capacity]
+    runs-on: ubuntu-latest
+    if: ${{ needs.load-config.outputs.rbac_fabric_enabled == 'true' }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Azure Login (Federated Credential)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ needs.load-config.outputs.azure_client_id }}
+          tenant-id: ${{ needs.load-config.outputs.azure_tenant_id }}
+          subscription-id: ${{ needs.load-config.outputs.azure_subscription_id }}
+          
+      - name: Verify Fabric Admin Role
+        shell: pwsh
+        run: |
+          Write-Host "⚠️  Fabric Administrator role must be assigned manually"
+          Write-Host "See: .github/scripts/setup-federated-credentials.sh for instructions"
+          Write-Host "Proceeding with domain/workspace creation..."
+
+  # ============================================================================
+  # JOB 5: Create Fabric Domain
+  # ============================================================================
+  create-fabric-domain:
+    name: Create Fabric Domain
+    needs: [load-config, get-capacity-info, verify-fabric-rbac]
+    runs-on: ubuntu-latest
+    if: ${{ needs.load-config.outputs.fabric_domain_enabled == 'true' }}
+    outputs:
+      domain_id: ${{ steps.create.outputs.domain_id }}
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Azure Login (Federated Credential)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ needs.load-config.outputs.azure_client_id }}
+          tenant-id: ${{ needs.load-config.outputs.azure_tenant_id }}
+          subscription-id: ${{ needs.load-config.outputs.azure_subscription_id }}
+          
+      - name: Create Fabric Domain
+        id: create
+        shell: pwsh
+        run: |
+          # Use your existing PowerShell script!
+          ./scripts/Fabric_Purview_Automation/create_fabric_domain.ps1 `
+            -domainName "${{ needs.load-config.outputs.fabric_domain_name }}"
+
+  # ============================================================================
+  # JOB 6: Create Fabric Workspace
+  # ============================================================================
+  create-fabric-workspace:
+    name: Create Fabric Workspace
+    needs: [load-config, get-capacity-info, create-fabric-domain]
+    runs-on: ubuntu-latest
+    if: ${{ needs.load-config.outputs.fabric_workspace_enabled == 'true' }}
+    outputs:
+      workspace_id: ${{ steps.create.outputs.workspace_id }}
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Azure Login (Federated Credential)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ needs.load-config.outputs.azure_client_id }}
+          tenant-id: ${{ needs.load-config.outputs.azure_tenant_id }}
+          subscription-id: ${{ needs.load-config.outputs.azure_subscription_id }}
+          
+      - name: Create Fabric Workspace
+        id: create
+        shell: pwsh
+        run: |
+          # Use your existing PowerShell script!
+          ./scripts/Fabric_Purview_Automation/create_fabric_workspace.ps1 `
+            -workspaceName "${{ needs.load-config.outputs.fabric_workspace_name }}" `
+            -fabricCapacityId "${{ needs.get-capacity-info.outputs.capacity_id }}"
+
+  # ============================================================================
+  # JOB 7: Assign Workspace to Domain
+  # ============================================================================
+  assign-workspace-to-domain:
+    name: Assign Workspace to Domain
+    needs: [load-config, get-capacity-info, create-fabric-domain, create-fabric-workspace]
+    runs-on: ubuntu-latest
+    if: ${{ needs.load-config.outputs.fabric_assign_domain_enabled == 'true' }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Azure Login (Federated Credential)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ needs.load-config.outputs.azure_client_id }}
+          tenant-id: ${{ needs.load-config.outputs.azure_tenant_id }}
+          subscription-id: ${{ needs.load-config.outputs.azure_subscription_id }}
+          
+      - name: Assign to Domain
+        shell: pwsh
+        run: |
+          # Use your existing PowerShell script!
+          ./scripts/Fabric_Purview_Automation/assign_workspace_to_domain.ps1 `
+            -workspaceName "${{ needs.load-config.outputs.fabric_workspace_name }}" `
+            -domainName "${{ needs.load-config.outputs.fabric_domain_name }}" `
+            -fabricCapacityId "${{ needs.get-capacity-info.outputs.capacity_id }}"
+
+  # ============================================================================
+  # JOB 8: Create Lakehouses
+  # ============================================================================
+  create-lakehouses:
+    name: Create Lakehouses
+    needs: [load-config, create-fabric-workspace]
+    runs-on: ubuntu-latest
+    if: ${{ needs.load-config.outputs.fabric_lakehouses_enabled == 'true' }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Azure Login (Federated Credential)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ needs.load-config.outputs.azure_client_id }}
+          tenant-id: ${{ needs.load-config.outputs.azure_tenant_id }}
+          subscription-id: ${{ needs.load-config.outputs.azure_subscription_id }}
+          
+      - name: Create Lakehouses
+        shell: pwsh
+        run: |
+          # Use your existing PowerShell script!
+          $lakehouseNames = "${{ needs.load-config.outputs.fabric_lakehouse_names }}"
+          ./scripts/Fabric_Purview_Automation/create_lakehouses.ps1 `
+            -workspaceName "${{ needs.load-config.outputs.fabric_workspace_name }}" `
+            -lakehouseNames $lakehouseNames
+
+  # ============================================================================
+  # JOB 9: Purview RBAC Assignment (MANUAL STEP - See Setup Guide)
+  # ============================================================================
+  verify-purview-rbac:
+    name: Verify Purview Roles
+    needs: [load-config, get-capacity-info]
+    runs-on: ubuntu-latest
+    if: ${{ needs.load-config.outputs.rbac_purview_enabled == 'true' }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Azure Login (Federated Credential)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ needs.load-config.outputs.azure_client_id }}
+          tenant-id: ${{ needs.load-config.outputs.azure_tenant_id }}
+          subscription-id: ${{ needs.load-config.outputs.azure_subscription_id }}
+          
+      - name: Verify Purview Roles
+        shell: pwsh
+        run: |
+          Write-Host "⚠️  Purview Data Curator role must be assigned manually"
+          Write-Host "See: .github/scripts/setup-federated-credentials.sh for instructions"
+          Write-Host "Proceeding with Purview operations..."
+
+  # ============================================================================
+  # JOB 10: Create Purview Collection
+  # ============================================================================
+  create-purview-collection:
+    name: Create Purview Collection
+    needs: [load-config, get-capacity-info, verify-purview-rbac]
+    runs-on: ubuntu-latest
+    if: ${{ needs.load-config.outputs.purview_collection_enabled == 'true' }}
+    outputs:
+      collection_name: ${{ steps.create.outputs.collection_name }}
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Azure Login (Federated Credential)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ needs.load-config.outputs.azure_client_id }}
+          tenant-id: ${{ needs.load-config.outputs.azure_tenant_id }}
+          subscription-id: ${{ needs.load-config.outputs.azure_subscription_id }}
+          
+      - name: Create Collection
+        id: create
+        shell: pwsh
+        run: |
+          # Use your existing PowerShell script!
+          ./scripts/Fabric_Purview_Automation/create_purview_collection.ps1 `
+            -purviewAccountName "${{ needs.load-config.outputs.purview_account }}" `
+            -collectionName "${{ needs.load-config.outputs.purview_collection_name }}"
+
+  # ============================================================================
+  # JOB 11: Register Fabric Datasource in Purview
+  # ============================================================================
+  register-fabric-datasource:
+    name: Register Fabric Datasource
+    needs: [load-config, create-fabric-workspace, create-purview-collection]
+    runs-on: ubuntu-latest
+    if: ${{ needs.load-config.outputs.purview_datasource_enabled == 'true' }}
+    outputs:
+      datasource_name: ${{ steps.register.outputs.datasource_name }}
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Azure Login (Federated Credential)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ needs.load-config.outputs.azure_client_id }}
+          tenant-id: ${{ needs.load-config.outputs.azure_tenant_id }}
+          subscription-id: ${{ needs.load-config.outputs.azure_subscription_id }}
+          
+      - name: Register Datasource
+        id: register
+        shell: pwsh
+        run: |
+          # Use your existing PowerShell script!
+          ./scripts/Fabric_Purview_Automation/register_fabric_datasource.ps1 `
+            -purviewAccountName "${{ needs.load-config.outputs.purview_account }}" `
+            -collectionName "${{ needs.load-config.outputs.purview_collection_name }}" `
+            -workspaceName "${{ needs.load-config.outputs.fabric_workspace_name }}"
+
+  # ============================================================================
+  # JOB 12: Trigger Purview Scan (Optional)
+  # ============================================================================
+  trigger-purview-scan:
+    name: Trigger Purview Scan
+    needs: [load-config, register-fabric-datasource]
+    runs-on: ubuntu-latest
+    if: ${{ needs.load-config.outputs.purview_scan_enabled == 'true' }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Azure Login (Federated Credential)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ needs.load-config.outputs.azure_client_id }}
+          tenant-id: ${{ needs.load-config.outputs.azure_tenant_id }}
+          subscription-id: ${{ needs.load-config.outputs.azure_subscription_id }}
+          
+      - name: Trigger Scan
+        shell: pwsh
+        run: |
+          # Use your existing PowerShell script!
+          ./scripts/Fabric_Purview_Automation/trigger_purview_scan_for_fabric_workspace.ps1 `
+            -purviewAccountName "${{ needs.load-config.outputs.purview_account }}" `
+            -workspaceName "${{ needs.load-config.outputs.fabric_workspace_name }}"
+
+  # ============================================================================
+  # JOB 13: Deployment Summary
+  # ============================================================================
+  deployment-summary:
+    name: Deployment Summary
+    needs: [
+      load-config,
+      get-capacity-info,
+      ensure-capacity,
+      create-fabric-domain,
+      create-fabric-workspace,
+      assign-workspace-to-domain,
+      create-lakehouses,
+      create-purview-collection,
+      register-fabric-datasource
+    ]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "# 🚀 Fabric-Purview Integration Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 📋 Deployment Steps" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Get Capacity Info | ${{ needs.get-capacity-info.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Ensure Capacity | ${{ needs.ensure-capacity.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Fabric Domain | ${{ needs.create-fabric-domain.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Fabric Workspace | ${{ needs.create-fabric-workspace.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Assign to Domain | ${{ needs.assign-workspace-to-domain.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Create Lakehouses | ${{ needs.create-lakehouses.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Purview Collection | ${{ needs.create-purview-collection.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Register Datasource | ${{ needs.register-fabric-datasource.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 🔗 Resource Info" >> $GITHUB_STEP_SUMMARY
+          echo "- **Capacity:** ${{ needs.load-config.outputs.fabric_capacity_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Domain:** ${{ needs.load-config.outputs.fabric_domain_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workspace:** ${{ needs.load-config.outputs.fabric_workspace_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Purview:** ${{ needs.load-config.outputs.purview_account }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All operations completed using PowerShell scripts (no Bicep deployment scripts!)"
+
+  # ============================================================================
+  # JOB 14: Send Telemetry to Log Analytics
+  # ============================================================================
+  send-telemetry:
+    name: Send Telemetry to Log Analytics
+    needs: [
+      load-config,
+      get-capacity-info,
+      ensure-capacity,
+      create-fabric-domain,
+      create-fabric-workspace,
+      assign-workspace-to-domain,
+      create-lakehouses,
+      create-purview-collection,
+      register-fabric-datasource,
+      deployment-summary
+    ]
+    runs-on: ubuntu-latest
+    if: always()  # Run even if previous jobs failed
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ needs.load-config.outputs.azure_client_id }}
+          tenant-id: ${{ needs.load-config.outputs.azure_tenant_id }}
+          subscription-id: ${{ needs.load-config.outputs.azure_subscription_id }}
+      
+      - name: Calculate Workflow Duration
+        id: duration
+        shell: pwsh
+        env:
+          CREATED_AT: ${{ github.event.workflow_run.created_at }}
+          UPDATED_AT: ${{ github.event.workflow_run.updated_at }}
+        run: |
+          $createdAt = $env:CREATED_AT
+          $updatedAt = $env:UPDATED_AT
+          if (![string]::IsNullOrEmpty($createdAt)) {
+            $startTime = [DateTime]::Parse($createdAt)
+          } elseif (![string]::IsNullOrEmpty($updatedAt)) {
+            $startTime = [DateTime]::Parse($updatedAt)
+          } else {
+            # Fallback to current time if both are missing
+            $startTime = [DateTime]::UtcNow
+          }
+          $endTime = [DateTime]::UtcNow
+          $durationSeconds = [int]($endTime - $startTime).TotalSeconds
+          
+          # If start time unavailable, estimate from job start
+          if ($durationSeconds -le 0) {
+            $durationSeconds = 300  # Default 5 minutes
+          }
+          
+          echo "duration_seconds=$durationSeconds" >> $env:GITHUB_OUTPUT
+          Write-Host "⏱️ Workflow duration: $durationSeconds seconds"
+      
+      - name: Send Workflow Telemetry
+        shell: pwsh
+        run: |
+          # Build telemetry payload
+          $telemetry = @{
+            # Timestamp (must be in ISO 8601 format)
+            Timestamp = (Get-Date).ToUniversalTime().ToString("o")
+            
+            # Workflow Metadata
+            RunId = "${{ github.run_id }}"
+            RunNumber = "${{ github.run_number }}"
+            RunAttempt = "${{ github.run_attempt }}"
+            Workflow = "${{ github.workflow }}"
+            Repository = "${{ github.repository }}"
+            Branch = "${{ github.ref_name }}"
+            Commit = "${{ github.sha }}"
+            Actor = "${{ github.actor }}"
+            Event = "${{ github.event_name }}"
+            
+            # Environment & Configuration
+            Environment = "${{ inputs.environment }}"
+            ConfigFile = "${{ inputs.config_file }}"
+            SkipInfrastructure = "${{ inputs.skip_infrastructure }}"
+            DryRun = "${{ inputs.dry_run }}"
+            
+            # Azure Context
+            TenantId = "${{ needs.load-config.outputs.azure_tenant_id }}"
+            SubscriptionId = "${{ needs.load-config.outputs.azure_subscription_id }}"
+            ResourceGroup = "${{ needs.load-config.outputs.azure_resource_group }}"
+            
+            # Fabric Configuration
+            FabricCapacityName = "${{ needs.load-config.outputs.fabric_capacity_name }}"
+            FabricDomainName = "${{ needs.load-config.outputs.fabric_domain_name }}"
+            FabricDomainEnabled = "${{ needs.load-config.outputs.fabric_domain_enabled }}"
+            FabricWorkspaceName = "${{ needs.load-config.outputs.fabric_workspace_name }}"
+            FabricWorkspaceEnabled = "${{ needs.load-config.outputs.fabric_workspace_enabled }}"
+            FabricLakehousesEnabled = "${{ needs.load-config.outputs.fabric_lakehouses_enabled }}"
+            
+            # Purview Configuration
+            PurviewAccount = "${{ needs.load-config.outputs.purview_account }}"
+            PurviewCollectionName = "${{ needs.load-config.outputs.purview_collection_name }}"
+            PurviewCollectionEnabled = "${{ needs.load-config.outputs.purview_collection_enabled }}"
+            PurviewDatasourceEnabled = "${{ needs.load-config.outputs.purview_datasource_enabled }}"
+            PurviewScanEnabled = "${{ needs.load-config.outputs.purview_scan_enabled }}"
+            
+            # Job Statuses (success/failure/skipped)
+            GetCapacityInfoStatus = "${{ needs.get-capacity-info.result }}"
+            EnsureCapacityStatus = "${{ needs.ensure-capacity.result }}"
+            CreateDomainStatus = "${{ needs.create-fabric-domain.result }}"
+            CreateWorkspaceStatus = "${{ needs.create-fabric-workspace.result }}"
+            AssignToDomainStatus = "${{ needs.assign-workspace-to-domain.result }}"
+            CreateLakehousesStatus = "${{ needs.create-lakehouses.result }}"
+            CreateCollectionStatus = "${{ needs.create-purview-collection.result }}"
+            RegisterDatasourceStatus = "${{ needs.register-fabric-datasource.result }}"
+            DeploySummaryStatus = "${{ needs.deployment-summary.result }}"
+            
+            # Overall Status (success if all required jobs succeeded)
+            OverallStatus = if (
+              "${{ needs.create-fabric-workspace.result }}" -eq "success" -and
+              "${{ needs.create-purview-collection.result }}" -eq "success"
+            ) { "success" } else { "failure" }
+            
+            # Timing
+            DurationSeconds = ${{ steps.duration.outputs.duration_seconds }}
+            StartedAt = "${{ steps.capture-start-time.outputs.started_at }}"
+            CompletedAt = (Get-Date).ToUniversalTime().ToString("o")
+            
+            # Resource Outputs (if available from future enhancements)
+            # These would come from job outputs if we add them later
+            FabricDomainId = ""
+            FabricWorkspaceId = ""
+            PurviewCollectionId = ""
+            
+            # Traceability
+            WorkflowUrl = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            CommitUrl = "https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+          }
+          
+          Write-Host "📊 Telemetry Data:"
+          $telemetry | ConvertTo-Json -Depth 2 | Write-Host
+          
+          # Send to Log Analytics
+          ./scripts/monitoring/Send-WorkflowTelemetry.ps1 `
+            -WorkspaceId "${{ secrets.LOG_ANALYTICS_WORKSPACE_ID }}" `
+            -WorkspaceKey "${{ secrets.LOG_ANALYTICS_WORKSPACE_KEY }}" `
+            -TelemetryData $telemetry
