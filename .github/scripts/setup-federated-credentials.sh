@@ -191,7 +191,17 @@ az rest --method POST \  --body "{
 
     \"name\": \"github-actions-feature-automation\",    \"audiences\": [\"api://AzureADTokenExchange\"]
 
-    \"issuer\": \"https://token.actions.githubusercontent.com\",  }" 2>/dev/null || echo "  ⚠️  Credential for main branch already exists"
+    \"issuer\": \"https://token.actions.githubusercontent.com\",  }" 2>azrest_error_main.json
+if [ $? -eq 0 ]; then
+  echo "    ✅ Main branch credential created"
+else
+  if grep -q 'already exists' azrest_error_main.json || grep -q '409' azrest_error_main.json; then
+    echo "  ⚠️  Credential for main branch already exists"
+  else
+    echo "  ❌ Failed to create main branch credential:"
+    cat azrest_error_main.json
+  fi
+fi
 
     \"subject\": \"repo:$REPO_FULL_NAME:ref:refs/heads/feature/github-actions-automation\",
 
