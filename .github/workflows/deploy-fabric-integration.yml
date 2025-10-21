@@ -551,8 +551,20 @@ jobs:
       - name: Calculate Workflow Duration
         id: duration
         shell: pwsh
+        env:
+          CREATED_AT: ${{ github.event.workflow_run.created_at }}
+          UPDATED_AT: ${{ github.event.workflow_run.updated_at }}
         run: |
-          $startTime = [DateTime]::Parse("${{ github.event.workflow_run.created_at || github.event.workflow_run.updated_at }}")
+          $createdAt = $env:CREATED_AT
+          $updatedAt = $env:UPDATED_AT
+          if (![string]::IsNullOrEmpty($createdAt)) {
+            $startTime = [DateTime]::Parse($createdAt)
+          } elseif (![string]::IsNullOrEmpty($updatedAt)) {
+            $startTime = [DateTime]::Parse($updatedAt)
+          } else {
+            # Fallback to current time if both are missing
+            $startTime = [DateTime]::UtcNow
+          }
           $endTime = [DateTime]::UtcNow
           $durationSeconds = [int]($endTime - $startTime).TotalSeconds
           
