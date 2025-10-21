@@ -22,44 +22,43 @@ set -e
 
 
 
-REPO_FULL_NAME="${1:?GitHub repository (org/repo) is required}"REPO_FULL_NAME="${1:?GitHub repository (org/repo) is required}"
+REPO_FULL_NAME="${1:?GitHub repository (org/repo) is required}"
 
-APP_NAME="${2:-github-actions-fabric-automation}"APP_NAME="${2:-github-actions-fabric-automation}"
-
-
-
-echo "============================================================================"echo "============================================================================"
-
-echo "GitHub Actions Federated Credential Setup"echo "GitHub Actions Federated Credential Setup"
-
-echo "============================================================================"echo "============================================================================"
-
-echo "Repository: $REPO_FULL_NAME"echo "Repository: $REPO_FULL_NAME"
-
-echo "App Registration: $APP_NAME"echo "App Registration: $APP_NAME"
-
-echo ""echo ""
+APP_NAME="${2:-github-actions-fabric-automation}"
 
 
 
-# Get current subscription and tenant# Parse org and repo
-
-SUBSCRIPTION_ID=$(az account show --query id -o tsv)GITHUB_ORG=$(echo "$REPO_FULL_NAME" | cut -d'/' -f1)
-
-TENANT_ID=$(az account show --query tenantId -o tsv)GITHUB_REPO=$(echo "$REPO_FULL_NAME" | cut -d'/' -f2)
-
-
-
-echo "Azure Subscription: $SUBSCRIPTION_ID"# Get current subscription and tenant
-
-echo "Azure Tenant: $TENANT_ID"SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-
-echo ""TENANT_ID=$(az account show --query tenantId -o tsv)
-
+echo "============================================================================"
+echo "============================================================================"
+echo "GitHub Actions Federated Credential Setup"
+echo "GitHub Actions Federated Credential Setup"
+echo "============================================================================"
+echo "============================================================================"
+echo "Repository: $REPO_FULL_NAME"
+echo "Repository: $REPO_FULL_NAME"
+echo "App Registration: $APP_NAME"
+echo "App Registration: $APP_NAME"
+echo ""
+echo ""
 
 
-# Step 1: Create App Registrationecho "Azure Subscription: $SUBSCRIPTION_ID"
+# Get current subscription and tenant
+# Parse org and repo
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+GITHUB_ORG=$(echo "$REPO_FULL_NAME" | cut -d'/' -f1)
+TENANT_ID=$(az account show --query tenantId -o tsv)
+GITHUB_REPO=$(echo "$REPO_FULL_NAME" | cut -d'/' -f2)
 
+
+echo "Azure Subscription: $SUBSCRIPTION_ID"
+# Get current subscription and tenant
+echo "Azure Tenant: $TENANT_ID"
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+echo ""
+TENANT_ID=$(az account show --query tenantId -o tsv)
+
+
+# Step 1: Create App Registration
 echo "📝 Step 1: Creating App Registration..."echo "Azure Tenant: $TENANT_ID"
 
 APP_ID=$(az ad app list --display-name "$APP_NAME" --query "[0].appId" -o tsv)echo ""
