@@ -47,14 +47,14 @@ if (-not $TelemetryData.ContainsKey("Timestamp")) {
 }
 
 # Convert to JSON
-$jsonBody = $TelemetryData | ConvertTo-Json -Depth 10 -Compress
+$jsonPayload = $TelemetryData | ConvertTo-Json -Depth 10 -Compress
 
 # Build the API authorization signature
 $method = "POST"
 $contentType = "application/json"
 $resource = "/api/logs"
 $rfc1123date = [DateTime]::UtcNow.ToString("r")
-$contentLength = [System.Text.Encoding]::UTF8.GetByteCount($jsonBody)
+$contentLength = [System.Text.Encoding]::UTF8.GetByteCount($jsonPayload)
 
 # Create the signature string
 $xHeaders = "x-ms-date:$rfc1123date"
