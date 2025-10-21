@@ -92,7 +92,7 @@ try {
         -Method $method `
         -ContentType $contentType `
         -Headers $headers `
-        -Body $jsonBody `
+        -Body $jsonPayload `
         -UseBasicParsing
     
     Write-Host "✅ Telemetry sent successfully!"
