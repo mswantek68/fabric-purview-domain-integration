@@ -114,26 +114,29 @@ echo "🔐 Step 3: Assigning Azure RBAC roles..."fi
 
 # Contributor on subscription (for infrastructure deployment)# Step 3: Assign Azure RBAC Roles
 
-az role assignment create \echo ""
+# Check if Contributor role assignment exists
+if az role assignment list --assignee "$APP_ID" --role "Contributor" --scope "/subscriptions/$SUBSCRIPTION_ID" --query "[].id" -o tsv | grep -q .; then
+  echo "  ⚠️  Contributor role already assigned"
+else
+  if az role assignment create --assignee "$APP_ID" --role "Contributor" --scope "/subscriptions/$SUBSCRIPTION_ID" >/dev/null; then
+    echo "  ✅ Contributor role assigned"
+  else
+    echo "  ❌ Failed to assign Contributor role" >&2
+    exit 1
+  fi
+fi
 
-  --assignee "$APP_ID" \echo "🔐 Step 3: Assigning Azure RBAC roles..."
-
-  --role "Contributor" \
-
-  --scope "/subscriptions/$SUBSCRIPTION_ID" 2>/dev/null && echo "  ✅ Contributor role assigned" || echo "  ⚠️  Contributor role already assigned"# Contributor on subscription (for infrastructure deployment)
-
-az role assignment create \
-
-# User Access Administrator (for assigning Fabric/Purview roles)  --assignee "$APP_ID" \
-
-az role assignment create \  --role "Contributor" \
-
-  --assignee "$APP_ID" \  --scope "/subscriptions/$SUBSCRIPTION_ID" \
-
-  --role "User Access Administrator" \  --query "roleDefinitionName" -o tsv 2>/dev/null || echo "  ⚠️  Contributor role already assigned"
-
-  --scope "/subscriptions/$SUBSCRIPTION_ID" 2>/dev/null && echo "  ✅ User Access Administrator role assigned" || echo "  ⚠️  User Access Administrator role already assigned"
-
+# Check if User Access Administrator role assignment exists
+if az role assignment list --assignee "$APP_ID" --role "User Access Administrator" --scope "/subscriptions/$SUBSCRIPTION_ID" --query "[].id" -o tsv | grep -q .; then
+  echo "  ⚠️  User Access Administrator role already assigned"
+else
+  if az role assignment create --assignee "$APP_ID" --role "User Access Administrator" --scope "/subscriptions/$SUBSCRIPTION_ID" >/dev/null; then
+    echo "  ✅ User Access Administrator role assigned"
+  else
+    echo "  ❌ Failed to assign User Access Administrator role" >&2
+    exit 1
+  fi
+fi
 # User Access Administrator (for assigning Fabric/Purview roles)
 
 # Step 4: Create Federated Credentials for GitHub Actionsaz role assignment create \
