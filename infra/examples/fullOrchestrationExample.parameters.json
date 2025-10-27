@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "dev"
+    },
+    "domainName": {
+      "value": "DataAnalyticsDomain"
+    },
+    "workspaceName": {
+      "value": "DataAnalyticsWorkspace"
+    },
+    "fabricCapacityName": {
+      "value": "fabric-capacity-dev"
+    },
+    "fabricCapacitySku": {
+      "value": "F2"
+    },
+    "adminUPNs": {
+      "value": "admin@contoso.com"
+    },
+    "purviewAccountName": {
+      "value": "purview-account-dev"
+    },
+    "lakehouseNames": {
+      "value": "bronze,silver,gold"
+    },
+    "enablePurview": {
+      "value": true
+    },
+    "enableLogAnalytics": {
+      "value": false
+    },
+    "logAnalyticsWorkspaceId": {
+      "value": ""
+    }
+  }
+}
