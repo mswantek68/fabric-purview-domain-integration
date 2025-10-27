@@ -1,8 +1,8 @@
 name: ai-fabric-foundry
 infra:
   provider: bicep
-  module: main-with-modules
-  parameters: main-with-modules.bicepparam
+  module: main
+  parameters: main.bicepparam
 metadata:
   template: ''
 
