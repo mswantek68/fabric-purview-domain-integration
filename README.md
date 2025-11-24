@@ -256,7 +256,7 @@ The solution provides **dual script implementations** for maximum compatibility:
 |--------|---------|--------------|
 | `ensure_active_capacity.*` | Validate Fabric capacity | Fabric Admin |
 | `create_fabric_domain.*` | Create Fabric governance domain | Fabric Admin |
-| `create_fabric_workspace.*` | Create Fabric workspace | Fabric Capacity |
+| `create_fabric_workspace.*` | Create Fabric workspace **and provision Fabric workspace identity** | Fabric Capacity |
 | `assign_workspace_to_domain.*` | Assign workspace to domain | Workspace + Domain |
 | `create_purview_collection.*` | Create Purview collection | Purview Admin |
 | `register_fabric_datasource.*` | **Register Fabric as data source in Purview** (prerequisite for scanning) | Collection |
@@ -267,6 +267,8 @@ The solution provides **dual script implementations** for maximum compatibility:
 | `🆕 setup_document_indexers.*` | **Setup document indexing and processing pipeline** | OneLake Indexer |
 | `trigger_purview_scan_for_fabric_workspace.*` | **Locate registered data source and execute workspace-scoped scan** | Lakehouses + **Registered Datasource** |
 | `connect_log_analytics.*` | Connect monitoring | Log Analytics |
+
+Every run of `create_fabric_workspace.*` now calls the Fabric [Workspaces - Provision Identity](https://learn.microsoft.com/en-us/rest/api/fabric/core/workspaces/provision-identity) API so the workspace always has a managed identity available for trusted workspace access and private link scenarios. The script exports `FABRIC_WORKSPACE_IDENTITY_OBJECT_ID` (service principal object ID) and `FABRIC_WORKSPACE_IDENTITY_APP_ID` (application/client ID) beside the workspace ID in `/tmp/fabric_workspace.env`. Use those IDs when granting Azure AI Search access or wiring private link endpoints per the [Workspace identity](https://learn.microsoft.com/en-us/fabric/security/workspace-identity) guidance.
 
 **Key Feature**: The solution follows a **strict dependency order**: **first registers the entire Fabric tenant as a data source in Purview**, then creates a **scoped scan** that can successfully locate and scan only the specific workspace created by the deployment. **Additionally**, AI Search is configured with proper RBAC permissions to index documents from OneLake automatically.
 
